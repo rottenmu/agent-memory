@@ -1,0 +1,6 @@
+com\zimo\module\agentmemory\autoconfig\AgentMemoryAutoConfiguration.class
+com\zimo\module\agentmemory\memoryarch\MemoryArchController.class
+com\zimo\module\agentmemory\autoconfig\AgentMemoryAutoConfiguration$1.class
+com\zimo\module\agentmemory\autoconfig\AgentMemoryProperties.class
+com\zimo\module\agentmemory\autoconfig\AgentMemorySyncAutoConfiguration.class
+com\zimo\module\agentmemory\autoconfig\AgentMemoryAnalyticsController.class

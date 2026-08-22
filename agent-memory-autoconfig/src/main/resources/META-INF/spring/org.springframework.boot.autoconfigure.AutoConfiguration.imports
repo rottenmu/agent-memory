@@ -1,0 +1,2 @@
+com.zimo.module.agentmemory.autoconfig.AgentMemoryAutoConfiguration
+com.zimo.module.agentmemory.autoconfig.AgentMemorySyncAutoConfiguration

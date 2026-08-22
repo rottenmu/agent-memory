@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.zimo</groupId>
+        <artifactId>modules</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>agent-memory</artifactId>
+    <packaging>pom</packaging>
+    <name>module-agent-memory</name>
+    <description>Agent 四层金字塔记忆系统（L0 RawLog/L1 AtomicMemory/L2 SceneBlock/L3 Persona）：H2 MVStore OLTP + Arrow/Calcite OLAP 双库混合存储</description>
+
+    <modules>
+        <module>agent-memory-core</module>
+        <module>agent-memory-autoconfig</module>
+    </modules>
+
+    <properties>
+        <h2.version>2.3.232</h2.version>
+        <arrow.version>17.0.0</arrow.version>
+        <calcite.version>1.37.0</calcite.version>
+        <caffeine.version>3.1.8</caffeine.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${h2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-vector</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-memory-netty</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-format</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.calcite</groupId>
+                <artifactId>calcite-core</artifactId>
+                <version>${calcite.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

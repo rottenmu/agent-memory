@@ -1,0 +1,15 @@
+com\zimo\module\agentmemory\memoryfile\MemoryFileStoreRocksDbTest.class
+com\zimo\module\agentmemory\memoryfile\MemoryFileStoreTest.class
+com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest$FakeOltpProvider.class
+com\zimo\module\agentmemory\chat\Phase2EventAndPruneTest$FakeOltp.class
+com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest$FakeOlapProvider.class
+com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest$FakeOltpProvider$1.class
+com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest.class
+com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest$FakeOlapProvider$1.class
+com\zimo\module\agentmemory\sync\AsyncLogSyncTaskTest.class
+com\zimo\module\agentmemory\analytics\impl\ArrowOlapAnalyticsRepositoryQueryTest.class
+com\zimo\module\agentmemory\memoryfile\MemoryFileStoreRocksDbTest$MapStorage.class
+com\zimo\module\agentmemory\chat\AiConversationMemoryEventLogTest.class
+com\zimo\module\agentmemory\chat\Phase2EventAndPruneTest.class
+com\zimo\module\agentmemory\chat\AiConversationMemoryEventLogTest$FakeOltp.class
+com\zimo\module\agentmemory\sync\AsyncLogSyncTaskTest$FakeOltp.class
