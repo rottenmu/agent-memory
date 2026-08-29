@@ -56,8 +56,11 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
                   role VARCHAR(16) NOT NULL,
                   content CLOB NOT NULL,
                   tokens INT,
-                  meta_json CLOB
+                  meta_json CLOB,
+                  source VARCHAR(32)
                 )""");
+        // 兼容旧库：已有表缺 source 列时补列
+        jdbc.execute("ALTER TABLE l0_raw_log ADD COLUMN IF NOT EXISTS source VARCHAR(32)");
         jdbc.execute("""
                 CREATE TABLE IF NOT EXISTS l1_atomic_memory (
                   id VARCHAR(32) PRIMARY KEY,
@@ -102,8 +105,8 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
     @Override
     public void saveRawLog(L0RawLog logEntry) {
         jdbc.update("""
-                        INSERT INTO l0_raw_log (trace_id, session_id, user_id, ts, role, content, tokens, meta_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        INSERT INTO l0_raw_log (trace_id, session_id, user_id, ts, role, content, tokens, meta_json, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 logEntry.traceId(),
                 logEntry.sessionId(),
                 logEntry.userId(),
@@ -111,13 +114,14 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
                 logEntry.role(),
                 logEntry.content(),
                 logEntry.tokens(),
-                logEntry.metaJson());
+                logEntry.metaJson(),
+                logEntry.source());
     }
 
     @Override
     public List<L0RawLog> listRawLogsByTrace(String traceId) {
         return jdbc.query("""
-                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json
+                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json, source
                         FROM l0_raw_log WHERE trace_id = ? ORDER BY ts ASC""",
                 this::mapRawLog, traceId);
     }
@@ -125,7 +129,7 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
     @Override
     public List<L0RawLog> listRawLogsBySession(String sessionId) {
         return jdbc.query("""
-                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json
+                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json, source
                         FROM l0_raw_log WHERE session_id = ? ORDER BY ts ASC""",
                 this::mapRawLog, sessionId);
     }
@@ -135,7 +139,7 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
         int safeOffset = Math.max(0, offset);
         int safeLimit = Math.max(1, Math.min(limit, 10_000));
         return jdbc.query("""
-                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json
+                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json, source
                         FROM l0_raw_log ORDER BY id ASC LIMIT ? OFFSET ?""",
                 this::mapRawLog, safeLimit, safeOffset);
     }
@@ -144,7 +148,7 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
     public List<L0RawLog> listRawLogsSince(long afterId, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 10_000));
         return jdbc.query("""
-                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json
+                        SELECT id, trace_id, session_id, user_id, ts, role, content, tokens, meta_json, source
                         FROM l0_raw_log WHERE id > ? ORDER BY id ASC LIMIT ?""",
                 this::mapRawLog, afterId, safeLimit);
     }
@@ -302,7 +306,8 @@ public class H2OltpMemoryRepository implements OltpMemoryRepository {
                 rs.getString("role"),
                 rs.getString("content"),
                 (Integer) rs.getObject("tokens"),
-                rs.getString("meta_json"));
+                rs.getString("meta_json"),
+                rs.getString("source"));
     }
 
     private L1AtomicMemory mapAtomicMemory(ResultSet rs, int rowNum) throws SQLException {

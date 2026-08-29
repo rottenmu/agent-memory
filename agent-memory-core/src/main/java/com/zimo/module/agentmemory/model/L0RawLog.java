@@ -16,6 +16,9 @@ package com.zimo.module.agentmemory.model;
  * @param content    消息内容
  * @param tokens     token 消耗（估算）
  * @param metaJson   附加元数据 JSON（模型名、渠道、耗时等）
+ * @param source     Trajectory 事件来源（system_prompt / chain_of_thought / tool_call /
+ *                   tool_result / sub_agent / context_injection / user_message /
+ *                   assistant_message / system_event，可空）
  */
 public record L0RawLog(
         long id,
@@ -26,9 +29,10 @@ public record L0RawLog(
         String role,
         String content,
         Integer tokens,
-        String metaJson) {
+        String metaJson,
+        String source) {
 
-    /** 供写入使用的便捷构造（id 由数据库自增生成）。 */
+    /** 供写入使用的便捷构造（id 由数据库自增生成，无来源标识）。 */
     public static L0RawLog forInsert(
             String traceId,
             String sessionId,
@@ -38,6 +42,20 @@ public record L0RawLog(
             String content,
             Integer tokens,
             String metaJson) {
-        return new L0RawLog(0L, traceId, sessionId, userId, ts, role, content, tokens, metaJson);
+        return new L0RawLog(0L, traceId, sessionId, userId, ts, role, content, tokens, metaJson, null);
+    }
+
+    /** 供写入使用的便捷构造（id 由数据库自增生成，携带 Trajectory 来源标识）。 */
+    public static L0RawLog forInsert(
+            String traceId,
+            String sessionId,
+            String userId,
+            long ts,
+            String role,
+            String content,
+            Integer tokens,
+            String metaJson,
+            String source) {
+        return new L0RawLog(0L, traceId, sessionId, userId, ts, role, content, tokens, metaJson, source);
     }
 }

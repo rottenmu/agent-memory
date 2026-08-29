@@ -11,6 +11,7 @@ D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memory\AiMemoryController.java
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memory\AiMemoryService.java
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memory\MemorySecurityConfig.java
+D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memory\TrajectoryRecorder.java
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memoryarch\MemoryArchConfig.java
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memoryarch\MemoryArchRepository.java
 D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\main\java\com\zimo\module\agentmemory\memoryarch\MemoryArchService.java
