@@ -1,0 +1,30 @@
+server:
+  port: 9900
+
+spring:
+  application:
+    name: agent-memory
+  autoconfigure:
+    exclude:
+      # 独立运行不装配 RocksDB 文件存储（记忆文件走纯本地路径）
+      - com.zimo.framework.autoconfig.storage.RocksdbStorageAutoConfiguration
+
+# 关闭框架 API 注册表（避免 MySQL 依赖）；记忆文件服务走纯本地文件模式
+framework:
+  api-registry:
+    enabled: false
+  storage:
+    enabled: false
+
+agent-memory:
+  # H2 OLTP 文件库（module-agent-memory 专用豁免；数据落 data/agent-memory）
+  h2-url: ${AGENT_MEMORY_H2_URL:jdbc:h2:file:./data/agent-memory;MODE=LEGACY}
+  # OLAP Arrow IPC 数据文件
+  olap-arrow-data-file: ${AGENT_MEMORY_OLAP_FILE:./data/olap/l0_log.arrow}
+  # ETL 增量同步：每分钟
+  sync-cron: 0 */1 * * * ?
+  # 敏感过滤默认开启；白名单为空=放行全部类别
+  sensitive-filtering: true
+  whitelist-categories: ""
+  # 文件兼容模式记忆根目录（{baseDir}/{agentId}/MEMORY.md）
+  file-base-dir: ./data/agent-memory-files

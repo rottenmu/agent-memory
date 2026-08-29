@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.zimo</groupId>
+        <artifactId>agent-memory</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>agent-memory-application</artifactId>
+    <name>agent-memory-application</name>
+    <description>agent-memory 独立可执行应用：仅装配四层记忆能力（REST/MCP/分析/ETL），无需 MySQL，可单独 java -jar 运行</description>
+
+    <dependencies>
+        <!-- 记忆能力自动装配（core + framework 传递依赖） -->
+        <dependency>
+            <groupId>com.zimo</groupId>
+            <artifactId>agent-memory-autoconfig</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.zimo.agentmemory.app.AgentMemoryApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

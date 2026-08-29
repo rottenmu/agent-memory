@@ -1,0 +1,26 @@
+# Maven 构建产物
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# 数据文件（H2 / Arrow / MEMORY.md 兼容文件）
+data/
+*.mv.db
+*.trace.db
+*.arrow
+*.cursor
+*.lock
+
+# 日志
+*.log
+logs/
+
+# 系统
+.DS_Store
+Thumbs.db

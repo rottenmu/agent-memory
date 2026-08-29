@@ -18,6 +18,7 @@
     <modules>
         <module>agent-memory-core</module>
         <module>agent-memory-autoconfig</module>
+        <module>agent-memory-application</module>
     </modules>
 
     <properties>
