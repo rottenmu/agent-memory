@@ -1,7 +1,0 @@
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\analytics\impl\ArrowOlapAnalyticsRepositoryQueryTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\chat\AiConversationMemoryEventLogTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\chat\Phase2EventAndPruneTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\memoryfile\MemoryFileStoreRocksDbTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\memoryfile\MemoryFileStoreTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\storage\MemoryStorageFactoryTest.java
-D:\codehub\agent_runner\modules\agent-memory\agent-memory-core\src\test\java\com\zimo\module\agentmemory\sync\AsyncLogSyncTaskTest.java
