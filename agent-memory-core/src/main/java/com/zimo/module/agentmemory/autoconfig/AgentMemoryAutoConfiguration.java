@@ -15,14 +15,13 @@ import com.zimo.module.agentmemory.memory.MemorySecurityConfig;
 import com.zimo.module.agentmemory.security.AiMemorySensitiveFilter;
 import com.zimo.module.agentmemory.storage.MemoryStorageFacade;
 import com.zimo.module.agentmemory.storage.OlapAnalyticsRepository;
-import com.zimo.module.agentmemory.storage.MemoryStorageFactory;
 import com.zimo.module.agentmemory.storage.OltpMemoryRepository;
 import com.zimo.module.agentmemory.storage.spi.ArrowOlapStorageProvider;
 import com.zimo.module.agentmemory.storage.spi.H2OltpStorageProvider;
-import com.zimo.module.agentmemory.storage.spi.OlapStorageProvider;
-import com.zimo.module.agentmemory.storage.spi.OltpStorageProvider;
-import com.zimo.module.agentmemory.storage.spi.StorageContext;
 import com.zimo.module.agentmemory.sync.AsyncLogSyncTask;
+import com.zimo.module.ds.storage.StorageContext;
+import com.zimo.module.ds.storage.StorageProvider;
+import com.zimo.module.ds.storage.StorageRouter;
 import java.util.Arrays;
 import java.util.List;
 import javax.sql.DataSource;
@@ -58,12 +57,17 @@ public class AgentMemoryAutoConfiguration {
         return dataSource;
     }
 
-    /** 存储装配上下文（供 SPI Provider 创建仓储使用）。 */
+    /**
+     * 存储装配上下文（通用 SPI，位于 agent-datasource 的 module-datasource-storage）。
+     *
+     * <p>同时承载 JDBC 类后端（{@code jdbcUrl} + {@code dataSource}）与文件类后端
+     * （{@code dataFilePath}），由各 Provider 按需取用。</p>
+     */
     @Bean
     public StorageContext memoryStorageContext(
             AgentMemoryProperties properties, DataSource agentMemoryDataSource) {
         return new StorageContext(
-                MemoryStorageFactory.DEFAULT_OLTP_ENGINE,
+                AgentMemoryProperties.DEFAULT_OLTP_ENGINE,
                 properties.h2Url(),
                 properties.olapArrowDataFile(),
                 agentMemoryDataSource);
@@ -71,37 +75,47 @@ public class AgentMemoryAutoConfiguration {
 
     /** 内置 OLTP 存储后端：H2 MVStore（engine=h2）。 */
     @Bean
-    public OltpStorageProvider h2OltpStorageProvider() {
+    public StorageProvider<OltpMemoryRepository> h2OltpStorageProvider() {
         return new H2OltpStorageProvider();
     }
 
     /** 内置 OLAP 存储后端：Arrow + Calcite（engine=arrow，纯 Java 无 JNI）。 */
     @Bean
-    public OlapStorageProvider arrowOlapStorageProvider() {
+    public StorageProvider<OlapAnalyticsRepository> arrowOlapStorageProvider() {
         return new ArrowOlapStorageProvider();
     }
 
-    /** 存储工厂：按 oltp-engine / olap-engine 配置路由到对应后端实现。 */
-    @Bean
-    public MemoryStorageFactory memoryStorageFactory(
-            java.util.List<OltpStorageProvider> oltpProviders,
-            java.util.List<OlapStorageProvider> olapProviders,
-            StorageContext memoryStorageContext) {
-        return new MemoryStorageFactory(oltpProviders, olapProviders, memoryStorageContext);
-    }
-
-    /** OLTP 记忆仓储（按配置选择后端，承担运行时记忆 CRUD 与钻取召回）。 */
+    /**
+     * OLTP 记忆仓储：按 {@code agent-memory.oltp-engine} 路由到对应后端，承担运行时记忆 CRUD 与钻取召回。
+     *
+     * <p>路由直接委托通用 {@link StorageRouter}（原先多包的一层 {@code MemoryStorageFactory} 已移除）：
+     * 配置为空取默认引擎，配置未注册则告警并回退默认，且传给 Provider 的是**实际生效**的引擎名。</p>
+     */
     @Bean
     public OltpMemoryRepository oltpMemoryRepository(
-            MemoryStorageFactory memoryStorageFactory, AgentMemoryProperties properties) {
-        return memoryStorageFactory.createOltp(properties.oltpEngine());
+            List<StorageProvider<OltpMemoryRepository>> oltpProviders,
+            StorageContext memoryStorageContext,
+            AgentMemoryProperties properties) {
+        return StorageRouter.route(
+                oltpProviders,
+                properties.oltpEngine(),
+                AgentMemoryProperties.DEFAULT_OLTP_ENGINE,
+                memoryStorageContext,
+                "OLTP");
     }
 
-    /** OLAP 分析仓储（按配置选择后端，仅后台分析）。 */
+    /** OLAP 分析仓储：按 {@code agent-memory.olap-engine} 路由，仅后台分析使用。 */
     @Bean
     public OlapAnalyticsRepository olapAnalyticsRepository(
-            MemoryStorageFactory memoryStorageFactory, AgentMemoryProperties properties) {
-        return memoryStorageFactory.createOlap(properties.olapEngine());
+            List<StorageProvider<OlapAnalyticsRepository>> olapProviders,
+            StorageContext memoryStorageContext,
+            AgentMemoryProperties properties) {
+        return StorageRouter.route(
+                olapProviders,
+                properties.olapEngine(),
+                AgentMemoryProperties.DEFAULT_OLAP_ENGINE,
+                memoryStorageContext,
+                "OLAP");
     }
 
     /** 记忆分析服务。 */

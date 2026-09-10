@@ -31,6 +31,10 @@ public record AgentMemoryProperties(
     public static final String DEFAULT_OLAP_FILE = "./data/olap/l0_log.arrow";
     /** 默认同步间隔：每分钟。 */
     public static final String DEFAULT_SYNC_CRON = "0 */1 * * * ?";
+    /** OLTP 默认引擎（内置 H2 实现，engine 名与 {@code H2OltpStorageProvider} 对应）。 */
+    public static final String DEFAULT_OLTP_ENGINE = "h2";
+    /** OLAP 默认引擎（内置 Arrow 实现，engine 名与 {@code ArrowOlapStorageProvider} 对应）。 */
+    public static final String DEFAULT_OLAP_ENGINE = "arrow";
 
     public AgentMemoryProperties {
         if (h2Url == null || h2Url.isBlank()) {
@@ -43,10 +47,10 @@ public record AgentMemoryProperties(
             syncCron = DEFAULT_SYNC_CRON;
         }
         if (oltpEngine == null || oltpEngine.isBlank()) {
-            oltpEngine = "h2";
+            oltpEngine = DEFAULT_OLTP_ENGINE;
         }
         if (olapEngine == null || olapEngine.isBlank()) {
-            olapEngine = "arrow";
+            olapEngine = DEFAULT_OLAP_ENGINE;
         }
         if (fileBaseDir == null || fileBaseDir.isBlank()) {
             fileBaseDir = "./data/agent-memory-files";

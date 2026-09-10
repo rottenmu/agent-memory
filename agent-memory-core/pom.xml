@@ -20,6 +20,12 @@
             <artifactId>framework-common</artifactId>
             <version>1.0.0</version>
         </dependency>
+        <!-- 通用存储 SPI 骨架（零业务依赖）：StorageContext / StorageProvider / StorageRouter -->
+        <dependency>
+            <groupId>com.zimo</groupId>
+            <artifactId>module-datasource-storage</artifactId>
+            <version>1.0.0</version>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
