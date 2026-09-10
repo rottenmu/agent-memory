@@ -20,7 +20,6 @@
             <artifactId>framework-common</artifactId>
             <version>1.0.0</version>
         </dependency>
-        <!-- OLTP：H2 MVStore 嵌入式（module-agent-memory 专用豁免） -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -38,13 +37,10 @@
             <artifactId>agentscope-harness</artifactId>
             <version>${agentscope.version}</version>
         </dependency>
-
-        <!-- L3 Persona 进程缓存 -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
-        <!-- OLAP：Arrow 列式内存 + Parquet 导出（纯 Java 无 JNI） -->
         <dependency>
             <groupId>org.apache.arrow</groupId>
             <artifactId>arrow-vector</artifactId>
@@ -57,7 +53,6 @@
             <groupId>org.apache.arrow</groupId>
             <artifactId>arrow-format</artifactId>
         </dependency>
-        <!-- OLAP 查询：Calcite 优化器（纯 Java） -->
         <dependency>
             <groupId>org.apache.calcite</groupId>
             <artifactId>calcite-core</artifactId>
@@ -71,6 +66,15 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.zimo</groupId>
+            <artifactId>framework-autoconfig</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
     </dependencies>
 

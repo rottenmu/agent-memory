@@ -25,7 +25,7 @@ class AsyncLogSyncTaskTest {
 
         void add(long id, String sessionId) {
             logs.add(new L0RawLog(id, "trace-" + id, sessionId, "u1", id * 1000L,
-                    "user", "内容" + id, 10, null));
+                    "user", "内容" + id, 10, null, null));
         }
 
         @Override public void saveRawLog(L0RawLog log) { logs.add(log); }

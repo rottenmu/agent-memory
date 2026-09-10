@@ -26,7 +26,6 @@ class TrajectoryRecorderTest {
         @Override public void saveRawLog(L0RawLog log) { logs.add(log); }
         @Override public List<L0RawLog> listRawLogsByTrace(String traceId) { return List.of(); }
         @Override public List<L0RawLog> listRawLogsBySession(String sessionId) { return List.of(); }
-        @Override public List<L0RawLog> listRawLogsBySource(String sessionId, String source, int limit) { return List.of(); }
         @Override public List<L0RawLog> listRawLogsPage(int offset, int limit) { return List.of(); }
         @Override public List<L0RawLog> listRawLogsSince(long afterId, int limit) { return List.of(); }
         @Override public void saveAtomicMemory(com.zimo.module.agentmemory.model.L1AtomicMemory memory) { }
@@ -41,7 +40,6 @@ class TrajectoryRecorderTest {
         @Override public com.zimo.module.agentmemory.model.L3Persona getPersona(String userId, String personaType) { return null; }
         @Override public void deletePersona(String userId, String personaType) { }
         @Override public List<com.zimo.module.agentmemory.model.L3Persona> listPersonas(String userId) { return List.of(); }
-        @Override public List<com.zimo.module.agentmemory.model.L3Persona> listAllPersonas() { return List.of(); }
         @Override public List<L0RawLog> drillDownToRawLog(String traceId) { return List.of(); }
         @Override public long countL0Total() { return logs.size(); }
         @Override public long countL0Today() { return 0L; }

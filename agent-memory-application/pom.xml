@@ -18,7 +18,7 @@
         <!-- 记忆能力自动装配（core + framework 传递依赖） -->
         <dependency>
             <groupId>com.zimo</groupId>
-            <artifactId>agent-memory-autoconfig</artifactId>
+            <artifactId>agent-memory-core</artifactId>
             <version>1.0.0</version>
         </dependency>
 
