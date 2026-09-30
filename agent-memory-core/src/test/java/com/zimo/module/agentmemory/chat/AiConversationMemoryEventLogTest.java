@@ -3,7 +3,7 @@ package com.zimo.module.agentmemory.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.zimo.module.agentmemory.model.L0RawLog;
-import com.zimo.module.agentmemory.storage.OltpMemoryRepository;
+import com.zimo.module.agentmemory.storage.FakeOltpMemoryRepository;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -13,36 +13,31 @@ import org.junit.jupiter.api.Test;
  */
 class AiConversationMemoryEventLogTest {
 
-    /** 内存版 L0 事件流（模拟 H2）。 */
-    private static final class FakeOltp implements OltpMemoryRepository {
+    /** 内存版 L0 事件流（模拟 H2）；只覆写本测试用到的 L0 读取。 */
+    private static final class FakeOltp extends FakeOltpMemoryRepository {
         final List<L0RawLog> logs = new ArrayList<>();
+        boolean failWrites;
 
-        @Override public void saveRawLog(L0RawLog log) { logs.add(log); }
+        @Override public void saveRawLog(L0RawLog log) {
+            if (failWrites) {
+                throw new IllegalStateException("L0 unavailable");
+            }
+            logs.add(log);
+        }
+
         @Override public List<L0RawLog> listRawLogsByTrace(String traceId) {
             return logs.stream().filter(l -> l.traceId().equals(traceId)).toList();
         }
+
         @Override public List<L0RawLog> listRawLogsBySession(String sessionId) {
             return logs.stream().filter(l -> l.sessionId().equals(sessionId)).toList();
         }
-        @Override public List<L0RawLog> listRawLogsPage(int offset, int limit) { return List.of(); }
-        @Override public List<L0RawLog> listRawLogsSince(long afterId, int limit) { return List.of(); }
-        @Override public void saveAtomicMemory(com.zimo.module.agentmemory.model.L1AtomicMemory memory) { }
-        @Override public void deleteAtomicMemory(String id) { }
-        @Override public List<com.zimo.module.agentmemory.model.L1AtomicMemory> recallAtomicByType(String userId, String memoryType, int limit) { return List.of(); }
-        @Override public List<com.zimo.module.agentmemory.model.L1AtomicMemory> recallAtomicBySession(String sessionId, int limit) { return List.of(); }
-        @Override public List<com.zimo.module.agentmemory.model.L1AtomicMemory> listAtomicByTrace(String traceId) { return List.of(); }
-        @Override public void saveSceneBlock(com.zimo.module.agentmemory.model.L2SceneBlock block) { }
-        @Override public com.zimo.module.agentmemory.model.L2SceneBlock recallSceneBySession(String sessionId) { return null; }
-        @Override public List<com.zimo.module.agentmemory.model.L2SceneBlock> listScenesBySession(String sessionId, int limit) { return List.of(); }
-        @Override public void savePersona(com.zimo.module.agentmemory.model.L3Persona persona) { }
-        @Override public com.zimo.module.agentmemory.model.L3Persona getPersona(String userId, String personaType) { return null; }
-        @Override public void deletePersona(String userId, String personaType) { }
-        @Override public List<com.zimo.module.agentmemory.model.L3Persona> listPersonas(String userId) { return List.of(); }
+
         @Override public List<L0RawLog> drillDownToRawLog(String traceId) {
             return logs.stream().filter(l -> l.traceId().equals(traceId)).toList();
         }
+
         @Override public long countL0Total() { return logs.size(); }
-        @Override public long countL0Today() { return 0; }
     }
 
     @Test
@@ -57,6 +52,9 @@ class AiConversationMemoryEventLogTest {
         assertThat(oltp.logs).hasSize(4);
         assertThat(oltp.logs.stream().map(L0RawLog::role))
                 .containsExactly("user", "assistant", "user", "assistant");
+        assertThat(oltp.logs.stream().map(L0RawLog::source))
+                .containsExactly(
+                        "user_message", "assistant_message", "user_message", "assistant_message");
 
         // 新实例（模拟重启）+ 回放重建
         AiConversationMemory restarted = new AiConversationMemory(512, null, oltp);
@@ -72,5 +70,29 @@ class AiConversationMemoryEventLogTest {
         AiConversationMemory memory = new AiConversationMemory(512, null, null);
         memory.appendTurn("sess-2", "hi", "hello", 50);
         assertThat(memory.restore("sess-2")).isEmpty();
+    }
+
+    @Test
+    void forkRecordsCopiedMessagesWithTheirSources() {
+        FakeOltp oltp = new FakeOltp();
+        AiConversationMemory memory = new AiConversationMemory(512, null, oltp);
+        memory.appendTurn("source", "question", "answer", 50);
+
+        assertThat(memory.fork("source", "child")).isEqualTo(2);
+        assertThat(oltp.logs.stream().filter(log -> "child".equals(log.sessionId()))
+                .map(L0RawLog::source))
+                .containsExactly("user_message", "assistant_message");
+    }
+
+    @Test
+    void trajectoryWriteFailureDoesNotPreventConversationAppend() {
+        FakeOltp oltp = new FakeOltp();
+        oltp.failWrites = true;
+        AiConversationMemory memory = new AiConversationMemory(512, null, oltp);
+
+        memory.appendTurn("sess-fail", "hi", "hello", 50);
+
+        assertThat(memory.snapshot("sess-fail")).hasSize(2);
+        assertThat(oltp.logs).isEmpty();
     }
 }

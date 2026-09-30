@@ -1,6 +1,7 @@
 package com.zimo.module.agentmemory.memory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zimo.module.agentmemory.model.MemoryPage;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
@@ -32,6 +33,8 @@ public final class AiMemoryAgentTool {
                     "category", Map.of("type", "string",
                             "description", "记忆类别：persona=员工画像，preference=历史习惯，history=业务历史记录，custom=自定义（target=user 时建议填写）"),
                     "key", Map.of("type", "string", "description", "变量名 / 记忆键"),
+                    "importance", Map.of("type", "number", "description",
+                            "重要性 0~1。省略时由服务端自动评估；传入 0.9 及以上视为「显式标记为重要」，该条记忆免于遗忘淘汰"),
                     "content", Map.of("type", "string", "description", "记忆内容")),
             "required", List.of("target", "content"));
 
@@ -81,10 +84,12 @@ public final class AiMemoryAgentTool {
                     case "user" -> service.saveUserMemory(tenantId,
                             str(args.get("userId"), "unknown"),
                             str(args.get("category"), "custom"),
-                            str(args.get("content"), ""));
+                            str(args.get("content"), ""),
+                            numberOrNull(args.get("importance")));
                     case "global" -> service.saveGlobalMemory(tenantId,
                             str(args.get("key"), "mem-" + System.currentTimeMillis()),
-                            str(args.get("content"), ""));
+                            str(args.get("content"), ""),
+                            numberOrNull(args.get("importance")));
                     default -> service.saveSessionVar(tenantId,
                             str(args.get("sessionId"), "default"),
                             str(args.get("key"), "var-" + System.currentTimeMillis()),
@@ -120,14 +125,16 @@ public final class AiMemoryAgentTool {
             Map<String, Object> args = param == null ? Map.of() : param.getInput();
             String target = str(args.get("target"), "session");
             try {
-                List<Map<String, Object>> records = switch (target) {
+                // 工具场景一次性取默认页，不在此处分页；total/truncated 由 MemoryPage 携带
+                MemoryPage page = switch (target) {
                     case "user" -> service.listUserMemory(tenantId,
                             str(args.get("userId"), "unknown"),
-                            str(args.get("category"), null));
-                    case "global" -> service.listGlobalMemory(tenantId);
+                            str(args.get("category"), null), null, null);
+                    case "global" -> service.listGlobalMemory(tenantId, null, null);
                     default -> service.getSessionVars(tenantId,
-                            str(args.get("sessionId"), "default"));
+                            str(args.get("sessionId"), "default"), null, null);
                 };
+                List<Map<String, Object>> records = page.records();
                 if (records.isEmpty()) {
                     return Mono.just(ToolResultBlock.text("[]（暂无该范围记忆）"));
                 }
@@ -142,6 +149,29 @@ public final class AiMemoryAgentTool {
 
     private static String str(Object value, String fallback) {
         return value == null || String.valueOf(value).isBlank() ? fallback : String.valueOf(value);
+    }
+
+    /**
+     * 取可选的重要性数值。
+     *
+     * <p>非法值直接抛异常，由 {@code callAsync} 的 catch 转成工具错误返回 ——
+     * 模型会看到「importance 必须是 0~1 的数值」，而不是默默按自动评估值写入。</p>
+     *
+     * @param value 入参原值
+     * @return 数值；缺失或空白时返回 {@code null}（表示自动评估）
+     */
+    private static Double numberOrNull(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("importance 必须是 0~1 的数值，当前为: " + value);
+        }
     }
 
     private static String toJson(Object value) {

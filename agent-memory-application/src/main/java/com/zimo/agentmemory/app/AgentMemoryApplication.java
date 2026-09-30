@@ -18,8 +18,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * {@code com.zimo.module.agentmemory} 包——core 中 AiMemoryController/MemoryArchService 等
  * 组件通过 autoconfig 的 @Bean 注册，若被组件扫描会与 @Bean 重复装配冲突。</p>
  *
- * <p>启动：{@code mvn -pl modules/agent-memory/agent-memory-application -am spring-boot:run}
- * 或打包后 {@code java -jar agent-memory-application-1.0.0.jar}。</p>
+ * <p>使用 Maven 插件启动时，需通过 {@code spring-boot.run.jvmArguments} 向 fork JVM 传入
+ * {@code --add-opens=java.base/java.nio=ALL-UNNAMED}；打包后启动命令为
+ * {@code java --add-opens=java.base/java.nio=ALL-UNNAMED -jar agent-memory-application-1.0.0.jar}。
+ * Arrow IPC 导出需要开放 {@code java.nio}。</p>
  */
 @SpringBootApplication
 public class AgentMemoryApplication {

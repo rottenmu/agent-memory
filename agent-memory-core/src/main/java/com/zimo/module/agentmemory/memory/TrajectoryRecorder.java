@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@link #SOURCE_SUB_AGENT} 子 Agent 调度（含任务/结果摘要）</li>
  *   <li>{@link #SOURCE_CONTEXT_INJECTION} 上下文注入（历史摘要、检索片段、记忆注入）</li>
  *   <li>{@link #SOURCE_USER_MESSAGE} / {@link #SOURCE_ASSISTANT_MESSAGE} 对话消息</li>
+ *   <li>{@link #SOURCE_MEMORY_WRITE} 四层记忆变更</li>
  *   <li>{@link #SOURCE_SYSTEM_EVENT} 系统事件</li>
  * </ul>
  */
@@ -39,6 +40,7 @@ public class TrajectoryRecorder {
     public static final String SOURCE_SUB_AGENT = "sub_agent";
     public static final String SOURCE_CONTEXT_INJECTION = "context_injection";
     public static final String SOURCE_SYSTEM_EVENT = "system_event";
+    public static final String SOURCE_MEMORY_WRITE = "memory_write";
 
     private final OltpMemoryRepository oltp;
 

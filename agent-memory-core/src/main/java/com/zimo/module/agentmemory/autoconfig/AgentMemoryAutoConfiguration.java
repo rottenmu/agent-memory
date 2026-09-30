@@ -2,6 +2,16 @@ package com.zimo.module.agentmemory.autoconfig;
 
 import com.zaxxer.hikari.HikariDataSource;
 import com.zimo.module.agentmemory.analytics.MemoryAnalyticsService;
+import com.zimo.module.agentmemory.governance.AccessCounter;
+import com.zimo.module.agentmemory.governance.FactExtractor;
+import com.zimo.module.agentmemory.governance.ImportanceScorer;
+import com.zimo.module.agentmemory.governance.MemoryEvictor;
+import com.zimo.module.agentmemory.governance.MemoryGovernanceController;
+import com.zimo.module.agentmemory.governance.MemoryManager;
+import com.zimo.module.agentmemory.governance.MemoryMerger;
+import com.zimo.module.agentmemory.governance.MemoryMetrics;
+import com.zimo.module.agentmemory.governance.MemoryScorer;
+import com.zimo.module.agentmemory.mcp.MemoryMcpAccessGuard;
 import com.zimo.module.agentmemory.mcp.MemoryMcpEndpoint;
 import com.zimo.module.agentmemory.mcp.MemoryMcpToolkit;
 import com.zimo.module.agentmemory.memory.AiMemoryController;
@@ -159,13 +169,133 @@ public class AgentMemoryAutoConfiguration {
         return new AiMemorySensitiveFilter();
     }
 
+    /**
+     * 重要性评估器（规则档，零模型调用）。
+     *
+     * <p>与写入路径共用同一个 {@link AiMemorySensitiveFilter} 实例，保证「脱敏」与
+     * 「敏感降权」的口径一致：两处若各自持有一份规则集，迟早会出现「已脱敏但没降权」的错位。</p>
+     */
+    @Bean
+    public ImportanceScorer importanceScorer(AiMemorySensitiveFilter aiMemorySensitiveFilter) {
+        return new ImportanceScorer(aiMemorySensitiveFilter);
+    }
+
+    /**
+     * 事实抽取器（规则档默认开，LLM 档默认关）。
+     *
+     * <p>配置把 LLM 档打开、而实现尚未接线时**必须吵一声**：这类「开关拨了但没生效」是最难
+     * 察觉的失效形态 —— 日志里一切正常，只是抽取质量没有提升（决策 D2）。</p>
+     */
+    @Bean
+    public FactExtractor factExtractor(
+            ImportanceScorer importanceScorer, AgentMemoryProperties properties) {
+        boolean llmEnabled = Boolean.TRUE.equals(properties.extract().llmEnabled());
+        if (llmEnabled) {
+            log.warn("agent-memory.extract.llm-enabled=true，但 LLM 档抽取尚未接线："
+                    + "本次抽取仍按规则档执行，该开关当前不产生任何效果");
+        }
+        log.info("事实抽取器就绪：规则档启用，LLM 档 {}", llmEnabled ? "已配置开启但未生效" : "关闭");
+        return new FactExtractor(importanceScorer, llmEnabled);
+    }
+
     /** 智能体记忆服务（四层金字塔适配）。 */
     @Bean
     public AiMemoryService aiMemoryService(
             OltpMemoryRepository oltpMemoryRepository,
             AiMemorySensitiveFilter aiMemorySensitiveFilter,
-            MemorySecurityConfig memorySecurityConfig) {
-        return new AiMemoryService(oltpMemoryRepository, aiMemorySensitiveFilter, memorySecurityConfig);
+            MemorySecurityConfig memorySecurityConfig,
+            ImportanceScorer importanceScorer) {
+        return new AiMemoryService(oltpMemoryRepository, aiMemorySensitiveFilter,
+                memorySecurityConfig, importanceScorer);
+    }
+
+    /**
+     * S1 混合打分器（召回与遗忘淘汰共用同一口径）。
+     *
+     * <p>参数非法时 Spring 会带着 {@link IllegalStateException} 直接终止启动 —— 这是刻意的：
+     * 权重和不等于 1 时「服务能起来但所有分数都失去意义」，比启动失败更难排查（PRD §3.2）。</p>
+     */
+    @Bean
+    public MemoryScorer memoryScorer(AgentMemoryProperties properties) {
+        MemoryScorer scorer = MemoryScorer.of(properties.recall());
+        log.info("S1 记忆打分器就绪：权重[{}] 半衰期={}天 topK={} 注入阈值={}",
+                properties.recall().weights(),
+                scorer.halfLifeDays(),
+                scorer.topK(),
+                scorer.minScore());
+        return scorer;
+    }
+
+    /**
+     * 记忆合并器（近似条目归并）。
+     *
+     * <p>复用召回打分器的 {@code match} 做近似判定：让「什么算像」在召回与合并两处
+     * 只有一个定义（PRD §3.1）。</p>
+     */
+    @Bean
+    public MemoryMerger memoryMerger(MemoryScorer memoryScorer) {
+        MemoryMerger merger = MemoryMerger.of(memoryScorer);
+        log.info("记忆合并器就绪：近似阈值={}", MemoryMerger.DEFAULT_SIMILARITY_THRESHOLD);
+        return merger;
+    }
+
+    /**
+     * 遗忘淘汰器（与召回同一打分口径）。
+     *
+     * <p>复用同一个 {@link MemoryScorer} 实例而非按需新建 —— 两处若各自持有一份参数，
+     * 「低分不注入」与「低分淘汰」迟早会变成两套互不相容的标准（PRD §7.3）。</p>
+     */
+    @Bean
+    public MemoryEvictor memoryEvictor(MemoryScorer memoryScorer) {
+        MemoryEvictor evictor = MemoryEvictor.of(memoryScorer);
+        log.info("遗忘淘汰器就绪：最小闲置={}天 默认阈值={} 安全阀={}",
+                MemoryEvictor.DEFAULT_MIN_IDLE_DAYS,
+                MemoryEvictor.DEFAULT_THRESHOLD,
+                MemoryEvictor.SAFETY_RATIO);
+        return evictor;
+    }
+
+    /**
+     * 记忆运行期指标累加器（进程内计数）。
+     *
+     * <p>重启即归零，因此 {@link MemoryMetrics.Snapshot#since()} 表示本进程启动时刻 ——
+     * 这是调用方必须知道的语义，否则会把重启后的低值误读成业务量下滑。</p>
+     */
+    @Bean
+    public MemoryMetrics memoryMetrics() {
+        return new MemoryMetrics();
+    }
+
+    /**
+     * 召回访问计数累加器。
+     *
+     * <p>召回只在进程内累加，由 {@link AgentMemorySyncAutoConfiguration} 的固定间隔调度
+     * 批量落库（默认 30 秒）—— 让「计数更新不阻塞查询」成立（PRD §3.2）。</p>
+     */
+    @Bean
+    public AccessCounter accessCounter() {
+        return new AccessCounter();
+    }
+
+    /**
+     * 记忆管理门面：把 CRUD、召回与六项治理能力收成一个入口（PRD §3.1）。
+     *
+     * <p>注入的 {@code MemoryScorer} / {@code MemoryMerger} / {@code MemoryEvictor}
+     * 三个 bean 刻意共用同一个 {@code MemoryScorer} 实例：召回、合并近似判定、
+     * 淘汰阈值必须是同一套口径，否则会退化成两套互不相容的标准。</p>
+     */
+    @Bean
+    public MemoryManager memoryManager(
+            AiMemoryService aiMemoryService,
+            OltpMemoryRepository oltpMemoryRepository,
+            MemoryScorer memoryScorer,
+            FactExtractor factExtractor,
+            MemoryMerger memoryMerger,
+            MemoryEvictor memoryEvictor,
+            MemoryMetrics memoryMetrics,
+            AccessCounter accessCounter) {
+        return new MemoryManager(aiMemoryService, oltpMemoryRepository, memoryScorer,
+                factExtractor, memoryMerger, memoryEvictor, memoryMetrics, accessCounter);
     }
 
     /** 记忆管理接口（/api/ai/memory 兼容路径）。 */
@@ -175,6 +305,82 @@ public class AgentMemoryAutoConfiguration {
             MemorySecurityConfig memorySecurityConfig,
             AiMemorySensitiveFilter aiMemorySensitiveFilter) {
         return new AiMemoryController(aiMemoryService, memorySecurityConfig, aiMemorySensitiveFilter);
+    }
+
+    /**
+     * 记忆治理接口（{@code /api/ai/memory} 下的 batch / recall / extract / merge / evict / metrics / span）。
+     *
+     * <p>与 {@link AiMemoryController} 共用前缀、路径互不重叠；治理端点只做协议转换，
+     * 全部编排在 {@link MemoryManager} 内，便于单测同步断言。</p>
+     */
+    @Bean
+    public MemoryGovernanceController memoryGovernanceController(
+            MemoryManager memoryManager,
+            com.zimo.module.agentmemory.engine.MemorySpanRecorder memorySpanRecorder) {
+        return new MemoryGovernanceController(memoryManager, memorySpanRecorder);
+    }
+
+    /**
+     * 记忆 span 与审计记录器：本模块<b>唯一</b>发 {@code memory.*} span、写 {@code memory_span} 的地方。
+     *
+     * <p>埋点出口（{@link MemoryTraceSink}）由上层 {@code framework-ai} 提供 —— 本模块不能反向依赖它
+     * （会与「framework-ai 依赖 agent-memory-core」构成循环）。因此这里用 {@code ObjectProvider} 取，
+     * 取不到时只写审计表。</p>
+     *
+     * <p><b>取不到必须吵一声</b>：链路上没有 {@code memory.*} 属性这种失效，面板上表现为
+     * 「记忆功能没启用」，而审计表里数据一切正常 —— 静默降级会让排查方向完全跑偏。</p>
+     */
+    @Bean
+    public com.zimo.module.agentmemory.engine.MemorySpanRecorder memorySpanRecorder(
+            OltpMemoryRepository oltpMemoryRepository,
+            org.springframework.beans.factory.ObjectProvider<
+                    com.zimo.module.agentmemory.engine.MemoryTraceSink> traceSinkProvider) {
+        com.zimo.module.agentmemory.engine.MemoryTraceSink sink = traceSinkProvider.getIfAvailable();
+        if (sink == null) {
+            log.warn("未发现 MemoryTraceSink 实现：记忆动作只写审计表、不发链路 span，"
+                    + "链路里将看不到 memory.* 属性（正常部署下由 AiAgentAutoConfiguration 提供该 Bean）");
+        } else {
+            log.info("记忆埋点通道就绪：记忆动作将同时发链路 span 并写 memory_span 审计表");
+        }
+        return new com.zimo.module.agentmemory.engine.MemorySpanRecorder(oltpMemoryRepository, sink);
+    }
+
+    /**
+     * 事实抽取异步回写队列（PRD §7.2）。
+     *
+     * <p>回复返回后才做抽取落库，不占用用户可感知的时延；结果写审计表而<b>不</b>发 span，
+     * 因为此时链路已收尾（详见 {@code MemorySpanRecorder} 与 {@code MemoryWritebackQueue} 的类注释）。</p>
+     */
+    @Bean(destroyMethod = "close")
+    public com.zimo.module.agentmemory.engine.MemoryWritebackQueue memoryWritebackQueue(
+            MemoryManager memoryManager,
+            com.zimo.module.agentmemory.engine.MemorySpanRecorder memorySpanRecorder) {
+        return new com.zimo.module.agentmemory.engine.MemoryWritebackQueue(memoryManager,
+                memorySpanRecorder);
+    }
+
+    /**
+     * 记忆感知 Prompt 增强器（Push 召回：推理前主动注入，PRD §3.3）。
+     *
+     * <p>注入失败/召回失败/队列满都不阻断对话，但每一处都打 WARN —— 记忆是增强能力，
+     * 不是对话的前置条件。</p>
+     */
+    @Bean
+    public com.zimo.module.agentmemory.engine.MemoryAwarePromptBuilder memoryAwarePromptBuilder(
+            MemoryManager memoryManager,
+            com.zimo.module.agentmemory.engine.MemorySpanRecorder memorySpanRecorder,
+            com.zimo.module.agentmemory.engine.MemoryWritebackQueue memoryWritebackQueue,
+            OltpMemoryRepository oltpMemoryRepository,
+            AgentMemoryProperties properties) {
+        boolean enabled = properties.engine().enabledOrDefault();
+        if (enabled) {
+            log.info("记忆感知引擎已启用：推理前预召回并注入片段，回复后异步回写事实");
+        } else {
+            log.warn("记忆感知引擎已被配置关闭（agent-memory.engine.enabled=false）："
+                    + "不预召回、不注入、不写 L0 留痕、不入回写队列");
+        }
+        return new com.zimo.module.agentmemory.engine.MemoryAwarePromptBuilder(memoryManager,
+                memorySpanRecorder, memoryWritebackQueue, oltpMemoryRepository, enabled);
     }
 
     /** 记忆分层架构仓储（H2 JdbcTemplate 复用，模块自洽）。 */
@@ -242,13 +448,31 @@ public class AgentMemoryAutoConfiguration {
                 "手动", 1, ts));
     }
 
-    /** 文件兼容模式服务（{baseDir}/{agentId}/MEMORY.md，OpenClaw 互通；框架 RocksDB 存储存在时记忆文件落 RocksDB）。 */
+    /**
+     * 文件兼容模式服务（{baseDir}/{agentId}/MEMORY.md，OpenClaw 互通；框架 RocksDB 存储存在时记忆文件落 RocksDB）。
+     *
+     * <p>根目录的取值优先级：{@code ./data/agent-memory/file-base-dir.override}
+     * （设置面板「内存管理」保存时写入）> {@code agent-memory.file-base-dir}（application.yml）
+     * > 内置默认 {@code ./data/agent-memory-files}。</p>
+     */
     @Bean
     public MemoryFileService memoryFileService(
             AgentMemoryProperties properties,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
                     com.zimo.framework.common.storage.FileStorageService fileStorageService) {
-        return new MemoryFileService(java.nio.file.Paths.get(properties.fileBaseDir()), fileStorageService);
+        String configured = properties.fileBaseDir();
+        java.nio.file.Path override = com.zimo.module.agentmemory.memoryfile.MemoryFileService.overrideFile();
+        if (java.nio.file.Files.exists(override)) {
+            try {
+                String fromOverride = java.nio.file.Files.readString(override).trim();
+                if (!fromOverride.isEmpty()) {
+                    configured = fromOverride;
+                }
+            } catch (java.io.IOException ignored) {
+                // 覆盖文件读不出来就退回 application.yml，不让启动挂在一行配置上
+            }
+        }
+        return new MemoryFileService(java.nio.file.Paths.get(configured), fileStorageService);
     }
 
     /** 文件兼容模式 REST 接口（/api/agent-memory/file/**，4 个）。 */
@@ -263,10 +487,24 @@ public class AgentMemoryAutoConfiguration {
         return new MemoryMcpToolkit(aiMemoryService);
     }
 
+    /** 记忆 MCP 端点准入校验器（令牌取 {@code agent-memory.mcp-token}，为空则仅放行回环来源）。 */
+    @Bean
+    public MemoryMcpAccessGuard memoryMcpAccessGuard(AgentMemoryProperties properties) {
+        MemoryMcpAccessGuard guard = new MemoryMcpAccessGuard(properties.mcpToken());
+        if (guard.tokenConfigured()) {
+            log.info("记忆 MCP 端点已启用令牌鉴权（/api/agent-memory/mcp）");
+        } else {
+            log.warn("记忆 MCP 端点未配置 agent-memory.mcp-token，仅放行回环来源访问；"
+                    + "如需跨机访问请注入 AGENT_MEMORY_TOKEN");
+        }
+        return guard;
+    }
+
     /** 记忆 MCP 接入端点（/api/agent-memory/mcp，HTTP JSON-RPC，WorkBuddy mcp.json 注册）。 */
     @Bean
-    public MemoryMcpEndpoint memoryMcpEndpoint(MemoryMcpToolkit memoryMcpToolkit) {
-        return new MemoryMcpEndpoint(memoryMcpToolkit);
+    public MemoryMcpEndpoint memoryMcpEndpoint(MemoryMcpToolkit memoryMcpToolkit,
+            MemoryMcpAccessGuard memoryMcpAccessGuard) {
+        return new MemoryMcpEndpoint(memoryMcpToolkit, memoryMcpAccessGuard);
     }
 
     /** OLAP 分析接口（/api/agent-memory/analytics）。 */

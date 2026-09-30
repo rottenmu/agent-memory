@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zimo.framework.common.ai.event.AiEventPublisher;
 import com.zimo.framework.common.ai.event.ConversationTurnEvent;
 import com.zimo.framework.common.storage.FileStorageService;
+import com.zimo.module.agentmemory.memory.TrajectoryRecorder;
 import com.zimo.module.agentmemory.model.L0RawLog;
 import com.zimo.module.agentmemory.storage.OltpMemoryRepository;
 import java.util.ArrayDeque;
@@ -40,6 +41,8 @@ public class AiConversationMemory {
     private final ObjectMapper objectMapper;
     /** L0 事件流（可空）：非空时 appendTurn 全量记录对话消息（role=user/assistant），支持跨重启回放。 */
     private final OltpMemoryRepository eventLog;
+    /** L0 轨迹记录器（可空）：对话事件经统一入口标注来源并隔离写入异常。 */
+    private final TrajectoryRecorder trajectoryRecorder;
     /** 事件总线（可空）：非空时发布 ConversationTurnEvent（会话域）。 */
     private final AiEventPublisher eventPublisher;
 
@@ -83,6 +86,7 @@ public class AiConversationMemory {
         this.sharedStorage = sharedStorage;
         this.objectMapper = new ObjectMapper();
         this.eventLog = eventLog;
+        this.trajectoryRecorder = eventLog == null ? null : new TrajectoryRecorder(eventLog);
         this.eventPublisher = eventPublisher;
     }
 
@@ -223,15 +227,17 @@ public class AiConversationMemory {
         if (eventLog == null || !hasText(sessionId)) {
             return;
         }
-        long ts = System.currentTimeMillis();
         String traceId = "convo-" + cn.hutool.core.util.IdUtil.fastSimpleUUID().substring(0, 12);
         if (hasText(userMessage)) {
-            eventLog.saveRawLog(L0RawLog.forInsert(traceId, sessionId, null, ts, "user", userMessage, null, null));
+            trajectoryRecorder.record(sessionId, null, traceId, "user",
+                    TrajectoryRecorder.SOURCE_USER_MESSAGE, userMessage, null);
         }
         if (hasText(assistantMessage)) {
-            eventLog.saveRawLog(L0RawLog.forInsert(traceId, sessionId, null, ts, "assistant", assistantMessage, null, null));
+            trajectoryRecorder.record(sessionId, null, traceId, "assistant",
+                    TrajectoryRecorder.SOURCE_ASSISTANT_MESSAGE, assistantMessage, null);
         }
         if (eventPublisher != null) {
+            long ts = System.currentTimeMillis();
             eventPublisher.publish(new ConversationTurnEvent(sessionId, userMessage, assistantMessage, ts));
         }
     }
@@ -258,11 +264,18 @@ public class AiConversationMemory {
         child.summary = source.summary;
         sessions.put(childSessionId, child);
         if (eventLog != null) {
-            long ts = System.currentTimeMillis();
             String traceId = "convo-" + cn.hutool.core.util.IdUtil.fastSimpleUUID().substring(0, 12);
             for (AiChatMessage m : copy) {
-                eventLog.saveRawLog(L0RawLog.forInsert(
-                        traceId, childSessionId, null, ts, m.role(), m.content(), null, null));
+                String eventSource;
+                if ("user".equals(m.role())) {
+                    eventSource = TrajectoryRecorder.SOURCE_USER_MESSAGE;
+                } else if ("assistant".equals(m.role())) {
+                    eventSource = TrajectoryRecorder.SOURCE_ASSISTANT_MESSAGE;
+                } else {
+                    eventSource = TrajectoryRecorder.SOURCE_SYSTEM_EVENT;
+                }
+                trajectoryRecorder.record(childSessionId, null, traceId,
+                        m.role(), eventSource, m.content(), null);
             }
         }
         return copy.size();

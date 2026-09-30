@@ -34,28 +34,7 @@ class StorageRoutingTest {
 
         @Override
         public OltpMemoryRepository create(StorageContext context) {
-            return new OltpMemoryRepository() {
-                @Override public void saveRawLog(com.zimo.module.agentmemory.model.L0RawLog log) { }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L0RawLog> listRawLogsByTrace(String traceId) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L0RawLog> listRawLogsBySession(String sessionId) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L0RawLog> listRawLogsPage(int offset, int limit) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L0RawLog> listRawLogsSince(long afterId, int limit) { return List.of(); }
-                @Override public void saveAtomicMemory(com.zimo.module.agentmemory.model.L1AtomicMemory memory) { }
-                @Override public void deleteAtomicMemory(String id) { }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L1AtomicMemory> recallAtomicByType(String userId, String memoryType, int limit) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L1AtomicMemory> recallAtomicBySession(String sessionId, int limit) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L1AtomicMemory> listAtomicByTrace(String traceId) { return List.of(); }
-                @Override public void saveSceneBlock(com.zimo.module.agentmemory.model.L2SceneBlock block) { }
-                @Override public com.zimo.module.agentmemory.model.L2SceneBlock recallSceneBySession(String sessionId) { return null; }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L2SceneBlock> listScenesBySession(String sessionId, int limit) { return List.of(); }
-                @Override public void savePersona(com.zimo.module.agentmemory.model.L3Persona persona) { }
-                @Override public com.zimo.module.agentmemory.model.L3Persona getPersona(String userId, String personaType) { return null; }
-                @Override public void deletePersona(String userId, String personaType) { }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L3Persona> listPersonas(String userId) { return List.of(); }
-                @Override public java.util.List<com.zimo.module.agentmemory.model.L0RawLog> drillDownToRawLog(String traceId) { return List.of(); }
-        @Override public long countL0Total() { return 0; }
-        @Override public long countL0Today() { return 0; }
-            };
+            return new FakeOltpMemoryRepository() { };
         }
     }
 

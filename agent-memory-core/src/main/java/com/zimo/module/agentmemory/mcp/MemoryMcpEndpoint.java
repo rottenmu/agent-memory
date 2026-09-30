@@ -19,18 +19,30 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>WorkBuddy 客户端在 {@code mcp.json} 中以 HTTP transport 注册本端点
  * （见 resources/mcp/memory-mcp.json 模板），即可在对话中直接调用记忆工具。</p>
+ *
+ * <p><b>准入</b>：本端点被 {@code plugin.auth} 拦截器排除在白名单外，鉴权由
+ * {@link MemoryMcpAccessGuard} 在 POST 入口完成 —— 配置了 {@code agent-memory.mcp-token}
+ * 时校验 {@code Authorization}（Bearer 或裸 token），未配置时仅放行回环来源。
+ * 未通过返回 HTTP 401 + JSON-RPC 错误体。</p>
  */
 @RestController
 @RequestMapping("/api/agent-memory/mcp")
 public class MemoryMcpEndpoint {
 
     private final MemoryMcpToolkit toolkit;
+    private final MemoryMcpAccessGuard accessGuard;
 
-    public MemoryMcpEndpoint(MemoryMcpToolkit toolkit) {
+    public MemoryMcpEndpoint(MemoryMcpToolkit toolkit, MemoryMcpAccessGuard accessGuard) {
         this.toolkit = toolkit;
+        this.accessGuard = accessGuard;
     }
 
-    /** SSE 探测/GET 访问：以 text/event-stream 返回空事件（避免 405/406；实际调用走 POST）。 */
+    /**
+     * SSE 探测/GET 访问：以 text/event-stream 返回空事件（避免 405/406；实际调用走 POST）。
+     *
+     * <p>刻意不做准入校验：响应体是固定常量、零信息量，而部分 MCP 客户端在建立 SSE 通道时
+     * 不携带自定义头，拦下来只会让连接失败却不提升任何安全性。所有读写入口都在 POST 上。</p>
+     */
     @org.springframework.web.bind.annotation.GetMapping(produces = "text/event-stream")
     public org.springframework.http.ResponseEntity<String> handleGet() {
         return org.springframework.http.ResponseEntity.ok()
@@ -38,8 +50,24 @@ public class MemoryMcpEndpoint {
                 .body("data: {\"jsonrpc\":\"2.0\",\"id\":null,\"result\":{}}\n\n");
     }
 
+    /**
+     * 工具调用入口。校验不通过返回 HTTP 401 + JSON-RPC 错误体：
+     * HTTP 状态码让客户端（含本平台的 MCP 授权弹窗）能识别「需要凭据」，错误文案说明缺什么。
+     */
     @PostMapping
-    public McpResponse handle(@RequestBody McpRequest request, HttpServletRequest servletRequest) {
+    public org.springframework.http.ResponseEntity<McpResponse> handle(
+            @RequestBody McpRequest request, HttpServletRequest servletRequest) {
+        if (!accessGuard.isAllowed(servletRequest.getRemoteAddr(),
+                servletRequest.getHeader(org.springframework.http.HttpHeaders.AUTHORIZATION))) {
+            return org.springframework.http.ResponseEntity
+                    .status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(McpResponse.error(request.id(), -32001, accessGuard.denyReason()));
+        }
+        return org.springframework.http.ResponseEntity.ok(dispatch(request));
+    }
+
+    /** 按 JSON-RPC 方法分发（校验已在上层完成）。 */
+    private McpResponse dispatch(McpRequest request) {
         // MCP 协议握手（WorkBuddy 标准 MCP 客户端连接时先调用）
         if ("initialize".equals(request.method())) {
             // 规范：initialize result 为 {protocolVersion, capabilities, serverInfo} 直接对象

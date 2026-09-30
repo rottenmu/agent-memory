@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 记忆 OLAP 分析接口（只读，基于 Arrow/Calcite 分析库）。
+ * agent-memory 模块的 OLAP 分析接口（只读，基于 Arrow/Calcite，统一返回 JSON）。
  *
- * <p>路径前缀 {@code /api/agent-memory/analytics}，仅做离线分析报表查询；
- * 运行时记忆 CRUD 走 {@code /api/ai/memory}（OLTP）。</p>
+ * <p>路径前缀为 {@code /api/agent-memory/analytics}，鉴权遵循应用统一拦截配置；
+ * 本类只做离线分析报表查询，运行时记忆 CRUD 走 {@code /api/ai/memory}（OLTP）。</p>
  */
 @RestController
 @RequestMapping("/api/agent-memory/analytics")
@@ -62,11 +62,12 @@ public class AgentMemoryAnalyticsController {
     }
 
     /**
-     * 会话消息分页（记忆总览"会话消息"Tab）：OLAP 宽表按会话过滤 + 分页。
+     * GET /messages：分页查询会话消息，OLAP 宽表按会话过滤；每条记录附带 Trajectory 来源。
      *
      * @param sessionId 会话 ID（可选；仅允许字母/数字/下划线/连字符，防 SQL 注入）
      * @param page      页码（从 0 开始）
      * @param size      每页条数（默认 50，上限 500）
+     * @return 分页数据；每条消息包含 trace_id、session_id、role、content、ts 和 source
      */
     @GetMapping("/messages")
     public Map<String, Object> messages(
@@ -81,7 +82,7 @@ public class AgentMemoryAnalyticsController {
             where = " WHERE session_id = '" + sessionId.replaceAll("[^a-zA-Z0-9_-]", "") + "'";
         }
         List<Map<String, Object>> rows = analyticsService.query(
-                "SELECT trace_id, session_id, role, content, ts FROM olap_l0_log"
+                "SELECT trace_id, session_id, role, content, ts, source FROM olap_l0_log"
                         + where + " ORDER BY ts DESC LIMIT " + safeSize + " OFFSET " + offset);
         List<Map<String, Object>> all = analyticsService.query(
                 "SELECT COUNT(*) AS cnt FROM olap_l0_log" + where);
@@ -95,10 +96,11 @@ public class AgentMemoryAnalyticsController {
     }
 
     /**
-     * 会话消息预览：返回该会话的 L0 消息列表 + 来源记忆文件信息（md 文档名 + 文件地址）。
+     * GET /session-messages：返回会话 L0 消息列表和来源记忆文件信息，每条消息附带 Trajectory 来源。
      *
      * @param sessionId 会话 ID（仅允许字母/数字/下划线/连字符，防 SQL 注入）
-     * @param agentId   智能体标识（定位文件兼容模式记忆文件 {baseDir}/{agentId}/MEMORY.md）
+     * @param agentId   智能体标识（默认 default，定位文件兼容模式记忆文件 {baseDir}/{agentId}/MEMORY.md）
+     * @return 会话消息、来源记忆文件信息；每条消息包含 trace_id、session_id、role、content、ts 和 source
      */
     @GetMapping("/session-messages")
     public Map<String, Object> sessionMessages(
@@ -106,7 +108,7 @@ public class AgentMemoryAnalyticsController {
             @RequestParam(defaultValue = "default") String agentId) {
         String safe = sessionId.replaceAll("[^a-zA-Z0-9_-]", "");
         List<Map<String, Object>> messages = analyticsService.query(
-                "SELECT trace_id, session_id, role, content, ts FROM olap_l0_log "
+                "SELECT trace_id, session_id, role, content, ts, source FROM olap_l0_log "
                         + "WHERE session_id = '" + safe + "' ORDER BY ts ASC");
         MemoryFileStore store = fileService.storeFor(agentId);
         String fileDesc = store.location();

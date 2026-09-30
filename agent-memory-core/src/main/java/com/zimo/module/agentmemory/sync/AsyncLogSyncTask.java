@@ -118,7 +118,8 @@ public class AsyncLogSyncTask implements Runnable {
                 logEntry.ts(),
                 logEntry.role(),
                 logEntry.content(),
-                logEntry.tokens() == null ? null : logEntry.tokens().longValue()
+                logEntry.tokens() == null ? null : logEntry.tokens().longValue(),
+                logEntry.source()
         };
     }
 }

@@ -51,7 +51,7 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
 
     /** 宽表列定义（与 H2 L0 对齐，下划线命名）。 */
     private static final String[] COLUMNS = {
-            "trace_id", "session_id", "user_id", "ts", "role", "content", "tokens"
+            "trace_id", "session_id", "user_id", "ts", "role", "content", "tokens", "source"
     };
 
     private final Path dataFile;
@@ -78,25 +78,42 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
         loadFromFile();
     }
 
-    /** 用新行集替换内存数据并导出 Arrow IPC 文件。 */
+    /** 用新行集替换内存数据并导出 Arrow IPC 文件；兼容七列旧行，来源按空值处理。 */
     @Override
     public synchronized void replaceRows(List<Object[]> newRows) {
-        this.rows = newRows == null ? new ArrayList<>() : newRows;
+        this.rows = normalizeRows(newRows);
         exportToFile();
         log.info("OLAP 数据集已刷新：{} 行，文件 {}", rows.size(), dataFile);
     }
 
-    /** 增量追加行并导出落盘（ETL 游标同步用）。 */
+    /** 增量追加行并导出落盘；兼容七列旧调用方，来源按空值处理。 */
     @Override
     public synchronized void appendRows(List<Object[]> newRows) {
         if (newRows == null || newRows.isEmpty()) {
             return;
         }
         List<Object[]> merged = new ArrayList<>(this.rows);
-        merged.addAll(newRows);
+        merged.addAll(normalizeRows(newRows));
         this.rows = merged;
         exportToFile();
         log.info("OLAP 数据集已增量追加：{} 行，总计 {}", newRows.size(), rows.size());
+    }
+
+    /** 将七列历史行补齐来源列，并拒绝无法识别的行结构。 */
+    private static List<Object[]> normalizeRows(List<Object[]> sourceRows) {
+        List<Object[]> normalized = new ArrayList<>();
+        if (sourceRows == null) {
+            return normalized;
+        }
+        for (Object[] row : sourceRows) {
+            if (row == null || (row.length != COLUMNS.length - 1 && row.length != COLUMNS.length)) {
+                throw new IllegalArgumentException("OLAP 行必须包含 7 或 8 列");
+            }
+            Object[] normalizedRow = new Object[COLUMNS.length];
+            System.arraycopy(row, 0, normalizedRow, 0, row.length);
+            normalized.add(normalizedRow);
+        }
+        return normalized;
     }
 
     @Override
@@ -149,6 +166,8 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
                 VarCharVector role = (VarCharVector) root.getVector(4);
                 VarCharVector content = (VarCharVector) root.getVector(5);
                 BigIntVector tokens = (BigIntVector) root.getVector(6);
+                VarCharVector source = root.getFieldVectors().size() > COLUMNS.length - 1
+                        ? (VarCharVector) root.getVector(COLUMNS.length - 1) : null;
                 for (int index = 0; index < count; index++) {
                     loaded.add(new Object[]{
                             toString(trace, index),
@@ -157,7 +176,8 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
                             ts.isNull(index) ? null : ts.get(index),
                             toString(role, index),
                             toString(content, index),
-                            tokens.isNull(index) ? null : tokens.get(index)
+                            tokens.isNull(index) ? null : tokens.get(index),
+                            toString(source, index)
                     });
                 }
                 root.clear();
@@ -198,6 +218,7 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
         fields.add(new Field("role", FieldType.nullable(new ArrowType.Utf8()), null));
         fields.add(new Field("content", FieldType.nullable(new ArrowType.Utf8()), null));
         fields.add(new Field("tokens", FieldType.nullable(new ArrowType.Int(64, true)), null));
+        fields.add(new Field("source", FieldType.nullable(new ArrowType.Utf8()), null));
 
         VectorSchemaRoot root = VectorSchemaRoot.create(new Schema(fields), allocator);
         root.allocateNew();
@@ -211,6 +232,12 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
             ((VarCharVector) root.getVector(4)).setSafe(index, str(row[4]));
             ((VarCharVector) root.getVector(5)).setSafe(index, str(row[5]));
             ((BigIntVector) root.getVector(6)).setSafe(index, row[6] == null ? 0L : ((Number) row[6]).longValue());
+            VarCharVector source = (VarCharVector) root.getVector(7);
+            if (row[7] == null) {
+                source.setNull(index);
+            } else {
+                source.setSafe(index, str(row[7]));
+            }
         }
         root.setRowCount(count);
         return root;
@@ -339,7 +366,8 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
                     typeFactory.createJavaType(Long.class),
                     typeFactory.createJavaType(String.class),
                     typeFactory.createJavaType(String.class),
-                    typeFactory.createJavaType(Long.class));
+                    typeFactory.createJavaType(Long.class),
+                    typeFactory.createJavaType(String.class));
             // 列名用大写：Calcite 将未加引号的标识符大写化后按大小写匹配列
             List<String> upperColumns = new ArrayList<>();
             for (String column : COLUMNS) {
@@ -365,7 +393,7 @@ public class ArrowOlapAnalyticsRepository implements OlapAnalyticsRepository {
     }
 
     private static String toString(VarCharVector vector, int index) {
-        if (vector.isNull(index)) {
+        if (vector == null || vector.isNull(index)) {
             return null;
         }
         // 必须显式 UTF-8 解码（Arrow 文件为 UTF-8 字节，Windows 默认 GBK 会乱码）

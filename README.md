@@ -75,6 +75,7 @@ framework:
 | 分组 | 端点 | 说明 |
 |---|---|---|
 | 四层记忆 | `GET/POST/DELETE /api/ai/memory/{session\|user\|global}/...`、`GET /api/ai/memory/policy` | 运行时记忆 CRUD + 脱敏策略 |
+| 记忆治理 | `POST /api/ai/memory/batch`、`/batch/query`、`/recall`、`/extract`、`/merge`、`/evict`、`GET /api/ai/memory/metrics` | 批量读写 / S1 混合打分召回 / 事实抽取 / 合并 / 遗忘淘汰 / 指标 |
 | 文件兼容 | `GET/POST/DELETE /api/agent-memory/file/{agentId}`、`/search?q=` | MEMORY.md 互通 |
 | 分析 | `/api/agent-memory/analytics/session-stats` / `user-activity` / `distillation-stats` / `trace` / `query` / `session-messages` / `messages` | 会话统计/时序/溯源/自定义 SQL/消息预览/消息分页 |
 | 记忆架构 | `/api/agent-memory/arch/stats`、`/configs`、`/configs/{id}/extract` | SOUL/USER 档案管理 |
@@ -92,7 +93,20 @@ curl -X POST http://localhost:9900/api/ai/memory/user/admin \
 curl -X POST http://localhost:9900/api/agent-memory/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memory_search","arguments":{"query":"周报","userId":"admin"}}}'
+
+# 召回：S1 混合打分（match / decay / importance 三分量可解释）
+# truncated=true 表示候选池被扫描上限截断，此时可能存在「分数更高却没进候选池」的记忆
+curl -X POST http://localhost:9900/api/ai/memory/recall \
+  -H "Content-Type: application/json" \
+  -d '{"tenantId":"default","userId":"admin","query":"周报","topK":5}'
+
+# 合并 / 淘汰：dryRun 缺省为 true（只出计划不落库），必须显式传 false 才会真的删
+curl -X POST http://localhost:9900/api/ai/memory/merge \
+  -H "Content-Type: application/json" -d '{"tenantId":"default","userId":"admin"}'
 ```
+
+**响应包体**：治理端点与全站一致，最终返回 `{code,msg,data}` 信封，业务结果在 `data` 内；
+`/merge`、`/evict` 的 `data.dryRun` 与 `data.plan` 用于判断「有没有真的动数据」。
 
 ### 2.5 数据文件位置
 

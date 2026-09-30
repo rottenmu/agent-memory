@@ -28,3 +28,5 @@ agent-memory:
   whitelist-categories: ""
   # 文件兼容模式记忆根目录（{baseDir}/{agentId}/MEMORY.md）
   file-base-dir: ./data/agent-memory-files
+  # 记忆 MCP 端点（/api/agent-memory/mcp）访问令牌：留空则仅放行回环来源，跨机访问必须配置
+  mcp-token: ${AGENT_MEMORY_TOKEN:}
