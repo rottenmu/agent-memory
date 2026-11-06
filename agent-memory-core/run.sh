@@ -7,6 +7,11 @@
 #      映射为 server.port=0（随机端口），覆盖独立运行配置里的 9900。
 #   2. --add-opens=java.base/java.nio=ALL-UNNAMED —— Arrow 内存访问所需
 #      （arrow-memory-netty 在 classpath，属 unnamed module）。
+#   2b. -Darrow.allocation.manager.type=Netty —— 必须显式指定。Arrow 17 未指定类型时
+#       会走 CheckAllocator 扫 classpath，Spring Boot fat jar 的嵌套
+#       BOOT-INF/lib/*.jar URL 让它算错类名，退化成加载
+#       org.apache.arrow.memory.DefaultAllocationManagerFactory（少了 .netty 段）并抛
+#       ClassNotFoundException，最终 olapAnalyticsRepository 装配失败、应用启动中止。
 #   3. 启动时固定 CWD 到本模块目录，使 yml 里的 ./data/* 稳定落在
 #      agent-memory-core/data/（否则数据文件位置取决于调用者所在目录）。
 #   4. 必须显式激活 agentmemory profile —— 配置放在 application-agentmemory.yml，
@@ -39,6 +44,7 @@ echo "[agent-memory] 启动独立后端 on :$PORT (profile=agentmemory, jar: $JA
 JAR_WIN="$(cygpath -w "$JAR" 2>/dev/null || echo "$JAR")"
 exec env -u SERVER__PORT "$JAVA" \
   --add-opens=java.base/java.nio=ALL-UNNAMED \
+  -Darrow.allocation.manager.type=Netty \
   -jar "$JAR_WIN" \
   --spring.profiles.active=agentmemory \
   --server.port="$PORT" \
