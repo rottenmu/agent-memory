@@ -15,9 +15,9 @@
     <name>module-agent-memory</name>
     <description>Agent 四层金字塔记忆系统（L0 RawLog/L1 AtomicMemory/L2 SceneBlock/L3 Persona）：H2 MVStore OLTP + Arrow/Calcite OLAP 双库混合存储</description>
 
+    <!-- 2026-11-06：agent-memory-application 已整合进 core，本聚合工程只保留一个子模块 -->
     <modules>
         <module>agent-memory-core</module>
-        <module>agent-memory-application</module>
     </modules>
 
     <properties>

@@ -93,6 +93,29 @@
                     <argLine>--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
+            <!--
+              本模块同时是「库」和「独立应用」：
+              - framework-ai / agent-application 依赖主构件 agent-memory-core-1.0.0.jar（普通 jar）；
+              - 独立运行用附属构件 agent-memory-core-1.0.0-exec.jar（fat jar）。
+              必须用 classifier，否则 repackage 会把主构件替换成 BOOT-INF 结构的 fat jar，
+              依赖方编译期将找不到 com.zimo.module.agentmemory.* 类。
+              配置放在 application-agentmemory.yml，启动时需显式激活 agentmemory profile。
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.zimo.agent.memory.AgentMemoryApplication</mainClass>
+                    <classifier>exec</classifier>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

@@ -52,9 +52,11 @@
 </dependency>
 ```
 
-> 注意：Maven parent 为 agent_runner 根 pom（`com.zimo:agent_runner`）。独立构建本仓库需先安装父 pom 或改用独立 parent；本仓库为 agent_runner 平台代码拆分。
+> 定位：`agent-memory` 是 `agent_runner` 的 Maven reactor 模块（parent 为 `com.zimo:modules:1.0.0`），
+> **不脱离仓库独立构建**；2026-11-06 起只有 `agent-memory-core` 一个子模块，启动类与独立运行配置
+> 都在 core 内，可单独 `java -jar` 运行。完整运行方式见第五节「独立运行」。
 
-### 2.2 配置（application.yml）
+### 2.2 配置（主应用 application.yml 中的 agent-memory.* 属性）
 
 ```yaml
 agent-memory:
@@ -121,18 +123,24 @@ curl -X POST http://localhost:9900/api/ai/memory/merge \
 
 ```text
 agent-memory/
-├── pom.xml
-├── agent-memory-core/          # 领域模型/存储/ETL/记忆服务
-│   ├── model/                  # L0RawLog / L1AtomicMemory / L2SceneBlock / L3Persona
-│   ├── storage/                # OLTP/OLAP 接口 + SPI（H2/Arrow 实现）
-│   ├── sync/                   # AsyncLogSyncTask（ETL）
-│   ├── chat/                   # AiConversationMemory（对话事件流）
-│   ├── memory/                 # AiMemoryService / AiMemoryAgentTool / AiMemoryController
-│   ├── memoryarch/             # 记忆架构配置（SOUL/USER）
-│   ├── memoryfile/             # MemoryFileStore（文件兼容模式）
-│   ├── mcp/                    # MemoryMcpEndpoint / MemoryMcpToolkit
-│   └── security/               # 脱敏过滤器 / 白名单
-└── agent-memory-autoconfig/    # 自动装配 + REST 控制器 + Properties
+├── pom.xml                     # reactor 聚合模块（parent: com.zimo:modules:1.0.0，仅 1 个子模块）
+├── agent-memory-core/          # 库 + 可独立运行应用（2026-11-06 合并）
+│   ├── src/main/java/com/zimo/module/agentmemory/
+│   │   ├── model/ storage/ sync/ chat/ engine/ memory/      # 领域 / 存储 / ETL / 召回
+│   │   ├── mcp/ security/ analytics/ vector/ governance/    # MCP / 脱敏 / 分析 / 治理
+│   │   └── autoconfig/         # AgentMemoryAutoConfiguration / Properties
+│   ├── src/main/java/com/zimo/agentmemory/app/
+│   │   └── AgentMemoryApplication.java   # 启动类（独立包，避开组件扫描冲突）
+│   ├── src/main/resources/
+│   │   ├── application-agentmemory.yml   # profile 专用独立运行配置（启动需激活 profile）
+│   │   ├── META-INF/spring/...AutoConfiguration.imports
+│   │   └── mcp/ skill/                   # MCP 工具定义 / 技能说明
+│   ├── run.sh                  # 启动 exec jar（unset SERVER__PORT + profile + --add-opens）
+│   ├── data/                   # 运行时生成：*.mv.db / olap/ / agent-memory-files/
+│   └── pom.xml                 # spring-boot-maven-plugin classifier=exec（主构件仍是库 jar）
+├── agent-memory-application/   # 已退役，不参与构建（见其 RETIRED.md；保留旧 jar 备份）
+└── frontend/
+    └── agent-memory-ui/        # 独立前端 Vue3 + Vite（6060，/api 代理到后端）
 ```
 
 ## 四、构建与验证
@@ -145,7 +153,65 @@ agent-memory/
 ./mvnw verify -pl modules/agent-memory
 ```
 
-## 五、已知边界
+## 五、独立运行（保留在 agent_runner 内，但可单独启动）
+
+`agent-memory` 既是 reactor 模块，也是一个能独立启动的应用。**2026-11-06 起原
+`agent-memory-application` 子模块已整合进 `agent-memory-core`**：启动类、配置、启动脚本、数据目录
+都在 core 内，聚合 pom 只剩这一个子模块。前端工程位于 **`frontend/agent-memory-ui/`**。
+
+> ⚠️ 两个刻意的设计（改动前务必看懂）：
+> 1. **配置叫 `application-agentmemory.yml`，不是 `application.yml`**。core 被 `framework-ai` /
+>    主应用当库依赖，classpath 根下的 `application.yml` 会被所有依赖方自动加载，`server.port=9900`
+>    与关闭 api-registry 等配置会污染主应用。改成 profile 专用文件后，只有显式激活才加载。
+> 2. **可执行 jar 带 `exec` classifier**。`spring-boot-maven-plugin` 若直接 repackage，会把主构件
+>    换成 `BOOT-INF/classes` 结构的 fat jar，依赖方编译期找不到 `com.zimo.module.agentmemory.*` 类。
+>    用 `classifier=exec` 后主构件仍是普通库 jar，另产 `agent-memory-core-1.0.0-exec.jar`。
+
+### 后端（默认 9900）
+
+```bash
+# 1) 在 agent_runner 仓库根打包
+#    Windows：Git Bash 用 ./mvnw，cmd/PowerShell 用 .\mvnw.cmd
+./mvnw -pl modules/agent-memory/agent-memory-core -am package -DskipTests
+# 产出：agent-memory-core/target/agent-memory-core-1.0.0.jar       （库，供依赖方）
+#       agent-memory-core/target/agent-memory-core-1.0.0-exec.jar  （可独立运行）
+
+# 2) Git Bash 下启动（Windows 也可）
+cd modules/agent-memory/agent-memory-core
+./run.sh
+# 脚本已封装：unset SERVER__PORT、--spring.profiles.active=agentmemory、
+#             --add-opens=java.base/java.nio=ALL-UNNAMED、--server.port
+
+# 3) 冒烟：MCP 工具列表
+curl --noproxy '*' -X POST http://127.0.0.1:9900/api/agent-memory/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# 期望：HTTP 200，响应含 "result" 与 tools 数组
+```
+
+- 若**不用 `run.sh`** 直接 `java -jar`，必须自己带
+  `--spring.profiles.active=agentmemory`，否则独立运行配置不生效；同时清掉 `SERVER__PORT`
+  （本机该变量会覆盖成别的端口）并加 `--add-opens=java.base/java.nio=ALL-UNNAMED`，否则 Arrow 初始化失败。
+- `run.sh` 会把工作目录固定到 `agent-memory-core/`，因此 H2 / Arrow / 记忆文件稳定落在
+  该目录的 `data/`（`agent-memory.mv.db`、`olap/l0_log.arrow`、`agent-memory-files/`）。
+- 端口被占用或需与主应用并行时，后端与前端用**同一个**环境变量错开：
+  `AGENT_MEMORY_PORT=9901 ./run.sh` + `AGENT_MEMORY_PORT=9901 npm run dev`。
+- ⚠️ 独立应用与主应用**不要同时写同一个 H2 文件**。当前两者 CWD 不同，数据文件天然分开
+  （独立应用用 `agent-memory-core/data/`，主应用用仓库根 `data/`）；若把
+  `AGENT_MEMORY_H2_URL` 指到同一路径，必须只让其中一个进程写入。
+
+### 前端（6060）
+
+```bash
+cd modules/agent-memory/frontend/agent-memory-ui
+npm install
+npm run dev        # http://localhost:6060
+```
+
+Vite 把 `/api` 代理到 `http://localhost:9900`（默认）；后端改端口时用 `AGENT_MEMORY_PORT` 对齐。
+前端与主壳插件 `frontend/modules/agentmemory` 是两套并存实现，页面同名但互不引用，按上一轮决策**均保留**。
+
+## 六、已知边界
 
 - L0 为追加日志不删除（合规留痕）；OLAP 分析副本最多落后 1 分钟
 - L2 场景块聚类当前仅建表未落地；embedding 使用 `PureJavaVectorUtil`（无外部模型依赖）
