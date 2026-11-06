@@ -5,6 +5,9 @@ node_modules/
 dist/
 out/
 
+# 本地验证 / 临时构建输出（vite --outDir 用）
+tmp/
+
 # 日志
 *.log
 npm-debug.log*

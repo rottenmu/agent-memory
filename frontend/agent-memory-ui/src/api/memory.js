@@ -100,17 +100,32 @@ export function queryOlap(sql) {
   return request.get('/agent-memory/analytics/query', { params: { sql } })
 }
 
-/** 用户画像列表（L3 Persona：用户/核心摘要/背景/版本/来源）。 */
+/* ================= L3 画像（走已合并的 OLTP 列表） ================= */
+
+/**
+ * L3 画像列表 —— 复用 OLTP 用户记忆接口，**不新增后端端点**。
+ * 后端 pageUserMemory 合并 L1 + L3 两表返回（记录带 layer / version / importance），
+ * 调用方按 category=persona|preference 或 layer=L3 过滤出画像。
+ */
+export function getUserPersonas(userId, { limit = 200, offset } = {}) {
+  return getUserMemory(userId, { limit, offset })
+}
+
+/* ⚠️ 以下 3 个接口在当前后端**没有对应端点**（调用返回 404），保留仅为历史兼容，
+ * 页面请勿直接使用。L3 数据一律走上面的 getUserPersonas / getUserMemory。
+ * 若将来补 /api/agent-memory/analytics/personas 端点，再启用并补测试。 */
+
+/** @deprecated 后端无端点，404。 */
 export function listPersonas() {
   return request.get('/agent-memory/analytics/personas')
 }
 
-/** 提取画像：聚合该用户 L1 记忆生成/更新 persona。 */
+/** @deprecated 后端无端点，404。 */
 export function extractPersona(userId) {
   return request.post(`/agent-memory/analytics/personas/${userId}/extract`)
 }
 
-/** 删除画像。 */
+/** @deprecated 后端无端点，404。 */
 export function deletePersona(userId, personaType) {
   return request.delete(`/agent-memory/analytics/personas/${userId}/${personaType}`)
 }
@@ -145,7 +160,7 @@ export function deleteArchConfig(id) {
   return request.delete('/agent-memory/arch/configs/' + id)
 }
 
-/** 会话消息分页（记忆总览"会话消息"Tab）。 */
+/** 会话消息分页（「消息记录」下钻与「会话消息」Tab 复用）。 */
 export function getMessages(params) {
   return request.get('/agent-memory/analytics/messages', { params })
 }

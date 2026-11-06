@@ -19,6 +19,7 @@ import java.util.Map;
  *   <li>{@code memory_read} — 读取会话/用户/全局记忆（返回 {@code total} / {@code truncated}）</li>
  *   <li>{@code memory_delete} — 删除指定记忆（id/key 可空=清空，返回真实删除条数）</li>
  *   <li>{@code memory_search} — 跨目标检索记忆（内容匹配）</li>
+ *   <li>{@code memory_ingest_turns} — 批量导入外部宿主（WorkBuddy）对话原文到 L0（幂等 + 脱敏）</li>
  * </ul>
  *
  * <p>{@code inputSchema} 已声明 {@code tenantId}：{@code call()} 一直会读它，但 schema 未声明时
@@ -99,6 +100,24 @@ public class MemoryMcpToolkit {
                                 "tenantId", Map.of("type", "string", "description", TENANT_DESC),
                                 "limit", Map.of("type", "integer", "description", "返回条数（默认 20）")),
                         "required", List.of("query"))));
+        tools.add(tool("memory_ingest_turns",
+                "批量导入外部宿主（如 WorkBuddy）的对话原文到 L0 事件流：按 requestId 聚合成一轮、"
+                        + "按内容哈希幂等、写入前脱敏；返回 inserted/skipped/failed 真实计数。",
+                Map.of("type", "object",
+                        "properties", Map.of(
+                                "sessionId", Map.of("type", "string", "description", "会话标识（必填）"),
+                                "userId", Map.of("type", "string", "description", "用户标识（可空）"),
+                                "tenantId", Map.of("type", "string", "description", TENANT_DESC),
+                                "turns", Map.of("type", "array", "description", "对话消息数组",
+                                        "items", Map.of("type", "object",
+                                                "properties", Map.of(
+                                                        "msgId", Map.of("type", "string", "description", "宿主消息唯一 ID"),
+                                                        "requestId", Map.of("type", "string", "description", "一轮交互 ID，用作 trace_id"),
+                                                        "ts", Map.of("type", "number", "description", "消息时间戳（毫秒）"),
+                                                        "role", Map.of("type", "string", "enum", List.of("user", "assistant")),
+                                                        "content", Map.of("type", "string", "description", "消息原文")),
+                                                "required", List.of("requestId", "role", "content")))),
+                        "required", List.of("sessionId", "turns"))));
         return tools;
     }
 
@@ -110,6 +129,7 @@ public class MemoryMcpToolkit {
             case "memory_read" -> read(tenantId, args);
             case "memory_delete" -> delete(tenantId, args);
             case "memory_search" -> search(tenantId, args);
+            case "memory_ingest_turns" -> ingest(tenantId, args);
             default -> Map.of("error", "unknown tool: " + name);
         };
     }
@@ -184,6 +204,25 @@ public class MemoryMcpToolkit {
         result.put("deleted", deleted > 0);
         result.put("deletedCount", deleted);
         return result;
+    }
+
+    /** 外部宿主对话导入：turns 必须是数组，元素转成 Map 后交给服务层逐条校验。 */
+    private Map<String, Object> ingest(String tenantId, Map<String, Object> args) {
+        Object raw = args.get("turns");
+        if (!(raw instanceof List<?> list)) {
+            return Map.of("error", "turns 必须是数组");
+        }
+        List<Map<String, Object>> turns = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) {
+                return Map.of("error", "turns 元素必须是对象");
+            }
+            Map<String, Object> one = new LinkedHashMap<>();
+            map.forEach((key, value) -> one.put(String.valueOf(key), value));
+            turns.add(one);
+        }
+        return memoryService.ingestTurns(tenantId, str(args, "sessionId", ""),
+                str(args, "userId", ""), turns);
     }
 
     /**

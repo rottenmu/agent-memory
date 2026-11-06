@@ -21,6 +21,11 @@ data/
 *.log
 logs/
 
+# Python 运行时产物 / 本地自动化状态（导入脚本生成，不入库）
+__pycache__/
+*.py[cod]
+.workbuddy/
+
 # 系统
 .DS_Store
 Thumbs.db

@@ -68,6 +68,8 @@ public class AiMemoryService {
     private final ImportanceScorer importanceScorer;
     private final List<String> whitelistCategories;
     private final boolean sensitiveFiltering;
+    /** 外部宿主对话导入拆到独立服务，避免本类超过 Service 500 行上限。 */
+    private final DialogueTurnIngestService dialogueTurnIngest;
 
     /**
      * @param oltp             四层 OLTP 记忆仓储
@@ -88,6 +90,8 @@ public class AiMemoryService {
                 ? List.of() : securityConfig.whitelistCategories();
         this.sensitiveFiltering = securityConfig == null
                 || securityConfig.sensitiveFiltering();
+        this.dialogueTurnIngest = new DialogueTurnIngestService(
+                oltp, sensitiveFilter, this.sensitiveFiltering);
     }
 
     /* ---------------- 短期会话变量（L1 session_var） ---------------- */
@@ -148,6 +152,19 @@ public class AiMemoryService {
             }
         }
         return deleted;
+    }
+
+    /* ---------------- 外部宿主对话导入（L0） ---------------- */
+
+    /**
+     * 批量导入外部宿主（WorkBuddy）的对话原文到 L0。
+     *
+     * <p>与 {@code saveSessionVar} 的区别：这里写的是 user/assistant 对话事件（append-only），
+     * 不是会话变量；实现与计数语义见 {@link DialogueTurnIngestService}。</p>
+     */
+    public Map<String, Object> ingestTurns(String tenantId, String sessionId, String userId,
+                                           List<Map<String, Object>> turns) {
+        return dialogueTurnIngest.ingestTurns(tenantId, sessionId, userId, turns);
     }
 
     /* ---------------- 用户长期记忆（L3 画像 + L1） ---------------- */

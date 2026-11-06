@@ -12,6 +12,9 @@
         <el-input v-model="sessionId" placeholder="会话 ID，如 s-20260819-001" clearable class="w-260" @keyup.enter="load">
           <template #prepend>会话</template>
         </el-input>
+        <el-select v-model="sessionId" placeholder="最近活跃会话" filterable clearable class="w-260" @change="load">
+          <el-option v-for="s in recentSessions" :key="s" :label="s" :value="s" />
+        </el-select>
         <el-button type="primary" :icon="Search" @click="load">查询</el-button>
         <div class="flex-1"></div>
         <el-button type="success" plain :icon="Plus" @click="openAdd">新增变量</el-button>
@@ -35,7 +38,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !list.length" description="输入会话 ID 查看该会话的业务变量" />
+      <el-empty v-if="!loading && !list.length" :description="sessionId ? '该会话暂无业务变量' : '输入或选择会话 ID 查看该会话的业务变量'" />
     </el-card>
 
     <el-dialog v-model="addVisible" title="新增会话变量" width="460px">
@@ -60,12 +63,13 @@
 
 <script setup>
 import '../styles/tokens.css'
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Refresh, Search, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getSessionVars, saveSessionVar, deleteSessionVar, recordsOf } from '../api/memory'
+import { getSessionVars, saveSessionVar, deleteSessionVar, getMessages, recordsOf } from '../api/memory'
 
 const sessionId = ref('')
+const recentSessions = ref([])
 const list = ref([])
 const loading = ref(false)
 const saving = ref(false)
@@ -73,7 +77,10 @@ const addVisible = ref(false)
 const addForm = ref({ sessionId: '', key: '', value: '' })
 
 async function load() {
-  if (!sessionId.value) return
+  if (!sessionId.value) {
+    list.value = []
+    return
+  }
   loading.value = true
   try {
     list.value = recordsOf(await getSessionVars(sessionId.value))
@@ -83,6 +90,33 @@ async function load() {
     loading.value = false
   }
 }
+
+/** 首屏自动带出「有 L1 变量」的最近活跃会话。
+ *  OLAP /analytics/messages 按 ts DESC，前 50 条里取 distinct session_id 作候选；
+ *  但最新消息可能只是 user/global 写入留下的 L0 轨迹（如 session_id=user-admin），
+ *  该会话并没有会话变量。故并行探测各候选的 L1 条数，默认落在第一个非空会话上。 */
+async function initRecentSessions() {
+  try {
+    const data = await getMessages({ page: 0, size: 50 })
+    const ids = [...new Set((data?.rows || []).map((r) => r.session_id).filter(Boolean))].slice(0, 8)
+    recentSessions.value = ids
+    if (!sessionId.value && ids.length) {
+      const probes = await Promise.all(ids.map(async (id) => {
+        try {
+          return recordsOf(await getSessionVars(id, { limit: 1 })).length > 0 ? id : ''
+        } catch {
+          return ''
+        }
+      }))
+      sessionId.value = probes.find(Boolean) || ids[0]
+    }
+  } catch {
+    recentSessions.value = []
+  }
+  await load()
+}
+
+onMounted(initRecentSessions)
 
 function openAdd() {
   addForm.value = { sessionId: sessionId.value, key: '', value: '' }
