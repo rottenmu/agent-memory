@@ -1,0 +1,282 @@
+/* ============================================================
+ * agentmemory 设计令牌（主色对齐 DeepSeek Harness 品牌蓝）
+ * 作用域：限定 .amm-page / .amm-tabs-page 容器，避免污染全局
+ * 主色：#4176E6（dsh deepseek-500）
+ * ============================================================ */
+.amm-page,
+.amm-tabs-page {
+  /* ---- Color: Primary（品牌蓝，唯一彩色点缀） ---- */
+  --amm-primary: #4176E6;
+  --amm-primary-hover: #5E8CFF;
+  --amm-primary-active: #3667CC;
+  --amm-primary-soft: #EEF3FD;
+
+  /* ---- Color: Ink（黑白灰单色系） ---- */
+  --amm-ink: #171717;
+  --amm-ink-muted: #4D4D4D;
+  --amm-ink-subtle: #888888;
+  --amm-ink-faint: #B0B0B0;
+
+  /* ---- Color: Canvas / Surface / Hairline ---- */
+  --amm-canvas: #FFFFFF;
+  --amm-canvas-soft: #FAFAFA;
+  --amm-canvas-soft-2: #F5F5F5;
+  --amm-surface-1: #FFFFFF;
+  --amm-surface-2: #FAFAFA;
+  --amm-hairline: #EBEBEB;
+  --amm-hairline-strong: #D4D4D4;
+
+  /* ---- Color: Semantic ---- */
+  --amm-success: #27A644;
+  --amm-success-soft: #E8F5EC;
+  --amm-warning: #F5A623;
+  --amm-warning-soft: #FEF3E2;
+  --amm-error: #E5484D;
+  --amm-error-soft: #FDECEC;
+  --amm-info: #0070F3;
+  --amm-info-soft: #E6F1FB;
+
+  /* ---- Font ---- */
+  --amm-font-sans: "Inter", -apple-system, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  --amm-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Radius / Shadow ---- */
+  --amm-radius-sm: 6px;
+  --amm-radius-md: 8px;
+  --amm-radius-lg: 12px;
+  --amm-shadow-xs: 0 1px 2px rgba(23, 23, 23, 0.04);
+  --amm-shadow-sm: 0 1px 3px rgba(23, 23, 23, 0.06), 0 1px 2px rgba(23, 23, 23, 0.04);
+}
+
+/* ============================================================
+ * 通用组件样式（DESIGN.md 4. Component Stylings 落地）
+ * 通过 :deep 作用于 Element Plus 组件，保持 scoped 隔离
+ * ============================================================ */
+
+/* ---- 页面基础排版 ---- */
+.amm-page,
+.amm-tabs-page {
+  font-family: var(--amm-font-sans);
+  color: var(--amm-ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.amm-page h1,
+.amm-tabs-page h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--amm-ink);
+}
+.amm-page .page-head,
+.amm-tabs-page .page-head {
+  margin-bottom: 20px;
+}
+
+/* ---- 卡片（白底 + hairline + 微投影） ---- */
+.amm-page .el-card,
+.amm-tabs-page .el-card {
+  border: 1px solid var(--amm-hairline);
+  border-radius: var(--amm-radius-lg);
+  box-shadow: none;
+}
+.amm-page .el-card.is-always-shadow,
+.amm-tabs-page .el-card.is-always-shadow {
+  box-shadow: var(--amm-shadow-xs);
+}
+.amm-page .el-card__header,
+.amm-tabs-page .el-card__header {
+  border-bottom: 1px solid var(--amm-hairline);
+  padding: 14px 18px;
+}
+.amm-page .el-card__body,
+.amm-tabs-page .el-card__body {
+  padding: 18px;
+}
+
+/* ---- 按钮（统一 8px 圆角，主按钮薰衣草蓝） ---- */
+.amm-page .el-button,
+.amm-tabs-page .el-button {
+  border-radius: var(--amm-radius-md);
+  font-weight: 500;
+}
+.amm-page .el-button--primary,
+.amm-tabs-page .el-button--primary {
+  --el-button-bg-color: var(--amm-primary);
+  --el-button-border-color: var(--amm-primary);
+  --el-button-hover-bg-color: var(--amm-primary-hover);
+  --el-button-hover-border-color: var(--amm-primary-hover);
+  --el-button-active-bg-color: var(--amm-primary-active);
+  --el-button-active-border-color: var(--amm-primary-active);
+}
+.amm-page .el-button.is-plain.el-button--primary,
+.amm-tabs-page .el-button.is-plain.el-button--primary {
+  --el-button-bg-color: var(--amm-primary-soft);
+  --el-button-text-color: var(--amm-primary);
+  --el-button-border-color: transparent;
+  --el-button-hover-bg-color: var(--amm-primary);
+  --el-button-hover-text-color: #fff;
+  --el-button-hover-border-color: var(--amm-primary);
+}
+
+/* ---- 表格（hairline 细线 + mono 时间戳） ---- */
+.amm-page .el-table,
+.amm-tabs-page .el-table {
+  --el-table-border-color: var(--amm-hairline);
+  --el-table-header-bg-color: var(--amm-canvas-soft);
+  --el-table-header-text-color: var(--amm-ink-subtle);
+  --el-table-row-hover-bg-color: var(--amm-canvas-soft);
+  --el-table-text-color: var(--amm-ink-muted);
+  font-size: 13px;
+}
+.amm-page .el-table th.el-table__cell,
+.amm-tabs-page .el-table th.el-table__cell {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--amm-ink-subtle);
+}
+.amm-page .el-table td.el-table__cell,
+.amm-tabs-page .el-table td.el-table__cell {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--amm-hairline);
+}
+
+/* ---- Tag 徽标（pill，语义底色） ---- */
+.amm-page .el-tag,
+.amm-tabs-page .el-tag {
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  border: none;
+  padding: 0 8px;
+}
+.amm-page .el-tag.el-tag--primary,
+.amm-tabs-page .el-tag.el-tag--primary {
+  --el-tag-bg-color: var(--amm-primary-soft);
+  --el-tag-text-color: var(--amm-primary);
+  --el-tag-border-color: transparent;
+}
+.amm-page .el-tag.el-tag--success,
+.amm-tabs-page .el-tag.el-tag--success {
+  --el-tag-bg-color: var(--amm-success-soft);
+  --el-tag-text-color: var(--amm-success);
+  --el-tag-border-color: transparent;
+}
+.amm-page .el-tag.el-tag--warning,
+.amm-tabs-page .el-tag.el-tag--warning {
+  --el-tag-bg-color: var(--amm-warning-soft);
+  --el-tag-text-color: var(--amm-warning);
+  --el-tag-border-color: transparent;
+}
+.amm-page .el-tag.el-tag--danger,
+.amm-tabs-page .el-tag.el-tag--danger {
+  --el-tag-bg-color: var(--amm-error-soft);
+  --el-tag-text-color: var(--amm-error);
+  --el-tag-border-color: transparent;
+}
+.amm-page .el-tag.el-tag--info,
+.amm-tabs-page .el-tag.el-tag--info {
+  --el-tag-bg-color: var(--amm-canvas-soft-2);
+  --el-tag-text-color: var(--amm-ink-muted);
+  --el-tag-border-color: transparent;
+}
+
+/* ---- 输入框（灰底、focus 薰衣草蓝焦点环） ---- */
+.amm-page .el-input__wrapper,
+.amm-tabs-page .el-input__wrapper {
+  border-radius: var(--amm-radius-md);
+  box-shadow: 0 0 0 1px var(--amm-hairline) inset;
+}
+.amm-page .el-input__wrapper.is-focus,
+.amm-tabs-page .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.25) inset;
+}
+.amm-page .el-select__wrapper,
+.amm-tabs-page .el-select__wrapper {
+  border-radius: var(--amm-radius-md);
+}
+
+/* ---- 空状态 ---- */
+.amm-page .el-empty__description,
+.amm-tabs-page .el-empty__description {
+  color: var(--amm-ink-subtle);
+  font-size: 13px;
+}
+
+/* ---- mono 工具类（ID / key / 时间戳 / 计数） ---- */
+.amm-mono {
+  font-family: var(--amm-font-mono);
+  font-size: 12px;
+  color: var(--amm-ink-subtle);
+}
+.amm-mono-strong {
+  font-family: var(--amm-font-mono);
+  font-size: 13px;
+  color: var(--amm-ink);
+}
+
+/* ============================================================
+ * 动效无障碍：尊重系统"减少动态效果"设置（WCAG 2.3.3）
+ * ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .amm-page *,
+  .amm-tabs-page *,
+  .amm-page *::before,
+  .amm-page *::after,
+  .amm-tabs-page *::before,
+  .amm-tabs-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+ * 键盘可访问性：可点击元素必须有可见焦点环（WCAG 2.4.7）
+ * ============================================================ */
+.amm-page a:focus-visible,
+.amm-page .el-button:focus-visible,
+.amm-page .ov-card:focus-visible,
+.amm-page .stat-card:focus-visible,
+.amm-tabs-page a:focus-visible,
+.amm-tabs-page .el-button:focus-visible {
+  outline: 2px solid var(--amm-primary);
+  outline-offset: 2px;
+  border-radius: var(--amm-radius-md);
+}
+
+/* ============================================================
+ * 卡片头部标题（视觉层次：与正文明确区分）
+ * ============================================================ */
+.amm-page .ov-card-head b,
+.amm-tabs-page .ov-card-head b {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  color: var(--amm-ink);
+}
+
+/* ============================================================
+ * 加载骨架（原型要求：空状态/加载必须可见，禁止白屏）
+ * ============================================================ */
+.amm-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.amm-skeleton-block {
+  height: 14px;
+  border-radius: 4px;
+  background: var(--amm-canvas-soft-2);
+  animation: amm-pulse 1.4s ease-in-out infinite;
+}
+@keyframes amm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+

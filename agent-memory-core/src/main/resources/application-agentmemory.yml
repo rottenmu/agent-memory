@@ -1,0 +1,42 @@
+# ============================================================
+# agent-memory 独立运行专用配置（profile: agentmemory）
+#
+# ⚠️ 文件名刻意不叫 application.yml：agent-memory-core 同时被 framework-ai /
+#    agent-application 当库依赖，classpath 根下的 application.yml 会被所有依赖方
+#    Spring Boot 应用自动加载，导致 server.port=9900、关闭 api-registry 等配置
+#    污染主应用。改成 profile 专用文件后，只有显式激活 profile 才会加载。
+#
+# 启动必须带（run.sh 已封装）：--spring.profiles.active=agentmemory
+# ============================================================
+server:
+  port: 9900
+
+spring:
+  application:
+    name: agent-memory
+  autoconfigure:
+    exclude:
+      # 独立运行不装配 RocksDB 文件存储（记忆文件走纯本地路径）
+      - com.zimo.framework.autoconfig.storage.RocksdbStorageAutoConfiguration
+
+# 关闭框架 API 注册表（避免 MySQL 依赖）；记忆文件服务走纯本地文件模式
+framework:
+  api-registry:
+    enabled: false
+  storage:
+    enabled: false
+
+agent-memory:
+  # H2 OLTP 文件库（module-agent-memory 专用豁免；数据落 data/agent-memory）
+  h2-url: ${AGENT_MEMORY_H2_URL:jdbc:h2:file:./data/agent-memory;MODE=LEGACY}
+  # OLAP Arrow IPC 数据文件
+  olap-arrow-data-file: ${AGENT_MEMORY_OLAP_FILE:./data/olap/l0_log.arrow}
+  # ETL 增量同步：每分钟
+  sync-cron: 0 */1 * * * ?
+  # 敏感过滤默认开启；白名单为空=放行全部类别
+  sensitive-filtering: true
+  whitelist-categories: ""
+  # 文件兼容模式记忆根目录（{baseDir}/{agentId}/MEMORY.md）
+  file-base-dir: ./data/agent-memory-files
+  # 记忆 MCP 端点（/api/agent-memory/mcp）访问令牌：留空则仅放行回环来源，跨机访问必须配置
+  mcp-token: ${AGENT_MEMORY_TOKEN:}
